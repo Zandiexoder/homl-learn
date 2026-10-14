@@ -72,6 +72,8 @@ async function prepareWorkspace(jobDir, custom) {
   const ws = path.join(WORK_DIR, randomUUID());
   await fs.mkdir(ws, { recursive: true });
   await fs.cp(path.join(ROOT, "src"), path.join(ws, "src"), { recursive: true });
+  // Workspaces may live outside the project (WORK_DIR), so link the dependencies in.
+  await fs.symlink(path.join(ROOT, "node_modules"), path.join(ws, "node_modules"), "dir");
   await fs.writeFile(
     path.join(ws, "tsconfig.json"),
     JSON.stringify({ extends: path.join(ROOT, "tsconfig.json"), include: ["src"], compilerOptions: { typeRoots: [path.join(ROOT, "node_modules/@types")] } }),

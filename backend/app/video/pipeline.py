@@ -203,17 +203,31 @@ async def render(folder: Path, on_progress) -> dict:
             resp = await client.post(f"{renderer_url()}/jobs", json={"jobDir": str(folder)})
         except httpx.HTTPError as exc:
             raise VideoError(f"The video renderer is unreachable at {renderer_url()}: {exc}") from exc
-        if resp.status_code >= 400:
-            raise VideoError(f"Renderer refused the job: {resp.text[:300]}")
-        job_id = resp.json()["id"]
-        while True:
-            await asyncio.sleep(2)
-            job = (await client.get(f"{renderer_url()}/jobs/{job_id}")).json()
-            on_progress(job.get("stage", ""), job.get("progress") or 0)
-            if job["status"] == "done":
-                return job
-            if job["status"] == "failed":
-                raise VideoError("Rendering failed: " + (job.get("error") or "")[:800])
+    if resp.status_code >= 400:
+        raise VideoError(f"Renderer refused the job: {resp.text[:300]}")
+    job_id = resp.json()["id"]
+    failures = 0
+    while True:
+        await asyncio.sleep(2)
+        # A fresh connection per poll: the renderer's event loop can stall while bundling, which drops
+        # kept-alive sockets. Tolerate a minute of missed polls before giving up.
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(f"{renderer_url()}/jobs/{job_id}")
+            job = resp.json()
+            failures = 0
+        except (httpx.TransportError, ValueError):
+            failures += 1
+            if failures > 30:
+                raise VideoError("Lost contact with the video renderer while it was rendering.")
+            continue
+        if resp.status_code == 404:
+            raise VideoError("The renderer restarted and lost the job. Try again.")
+        on_progress(job.get("stage", ""), job.get("progress") or 0)
+        if job["status"] == "done":
+            return job
+        if job["status"] == "failed":
+            raise VideoError("Rendering failed: " + (job.get("error") or "")[:800])
 
 
 # ---------------------------------------------------------------- narration
@@ -304,6 +318,9 @@ def write_subtitles(timeline: dict, path: Path) -> int:
             cues.append(f"{len(cues) + 1}\n{srt_time(line['abs_start'])} --> "
                         f"{srt_time(line['abs_start'] + line['seconds'])}\n{line['text']}\n")
     path.write_text("\n".join(cues))
+    # WebVTT copy for the browser player's subtitle track.
+    vtt = "WEBVTT\n\n" + "\n".join(c.split("\n", 1)[1].replace(",", ".", 2) for c in cues)
+    path.with_suffix(".vtt").write_text(vtt)
     return len(cues)
 
 
@@ -447,7 +464,7 @@ async def generate(artifact_id: str, start_at: str = "script") -> None:
     data.update(video=rel(final), stills=stills, checks=checks, duration=timeline["totalFrames"] / FPS,
                 timeline=[{"start": t["start"] / FPS, "lines": [ln["abs_start"] for ln in t["lines"]]}
                           for t in timeline["scenes"]],
-                subtitles=rel(folder / "subtitles.srt"))
+                subtitles=rel(folder / "subtitles.vtt"))
     for name in STAGES:
         stages[name] = "done"
     db.update("artifacts", artifact_id, {"status": "done", "updated_at": db.now(), "data": data,

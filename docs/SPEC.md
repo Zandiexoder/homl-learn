@@ -23,8 +23,8 @@ A self-hosted, single-user clone of NotebookLM. All data stays on the server; mo
 ## Providers
 
 - **LLM**: any provider via presets (OpenAI, Anthropic, Google Gemini, Mistral, Groq, DeepSeek, xAI, OpenRouter, Together, Ollama, LM Studio, vLLM) plus a custom OpenAI-compatible endpoint. A model can be assigned per task (chat, studio/podcast script, video script). Local embeddings (bge-m3).
-- **Voice**: any **ElevenLabs-compatible** TTS API. Presets: ElevenLabs (cloud), Kokoro, XTTS v2 and F5-TTS (local, the last two support cloning), or a custom endpoint. Voice cloning from an uploaded sample.
-- **Speech-to-text**: faster-whisper (local) or an OpenAI-compatible transcription endpoint.
+- **Voice**: any **ElevenLabs-compatible** TTS API. Presets: 10labs (self-hosted: projects via `X-Project`, async transcription, clone status polling; its chatterbox, F5-TTS and XTTS models cover local cloning), ElevenLabs (cloud), Kokoro (local, OpenAI-compatible), OpenAI TTS, or a custom endpoint of either protocol. Voice cloning from an uploaded sample.
+- **Speech-to-text**: the voice provider (10labs, ElevenLabs, OpenAI), faster-whisper via Speaches (local), or any OpenAI-compatible transcription endpoint.
 
 ## Design
 

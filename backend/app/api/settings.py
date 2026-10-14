@@ -132,6 +132,19 @@ async def clone(name: str = Form(...), description: str = Form(""), consent: boo
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.post("/transcribe")
+async def transcribe(audio: UploadFile = File(...)) -> dict:
+    """Speech to text for voice questions in chat."""
+    suffix = Path(audio.filename or "q.webm").suffix or ".webm"
+    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+        tmp.write(await audio.read())
+        tmp.flush()
+        try:
+            return {"text": (await voice.transcribe(Path(tmp.name)))["text"]}
+        except (voice.VoiceError, httpx.HTTPError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/health")
 async def health() -> dict:
     out: dict = {}

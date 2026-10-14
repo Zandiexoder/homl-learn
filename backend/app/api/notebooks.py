@@ -100,14 +100,26 @@ def delete_notebook(notebook_id: str) -> dict:
 # ------------------------------------------------------------------ sources
 
 def _start_processing(source_id: str, notebook_id: str) -> None:
-    async def work() -> None:
-        await ingest.process_source(source_id)
-        try:
-            await chat.refresh_overview(notebook_id)
-        except Exception as exc:  # noqa: BLE001 - the overview is a nicety; never fail the source for it
-            log.warning("notebook overview failed: %s", exc)
+    db.update("notebooks", notebook_id, {"overview_pending": 1})
 
-    jobs.spawn("ingest", work, lambda err: db.update("sources", source_id, {"status": "failed", "error": err}))
+    async def work() -> None:
+        try:
+            await ingest.process_source(source_id)
+            await chat.refresh_overview(notebook_id)
+        except ingest.IngestError:
+            raise
+        except LookupError as exc:  # no model configured yet: the source is still usable for search
+            log.warning("notebook overview skipped: %s", exc)
+        finally:
+            db.update("notebooks", notebook_id, {"overview_pending": 0})
+
+    def fail(err: str) -> None:
+        if db.fetch_one("SELECT status FROM sources WHERE id=?", (source_id,))["status"] != "ready":
+            db.update("sources", source_id, {"status": "failed", "error": err})
+        else:
+            log.warning("notebook overview failed: %s", err)
+
+    jobs.spawn("ingest", work, fail)
 
 
 def _new_source(notebook_id: str, kind: str, title: str, uri: str | None = None, text: str | None = None,

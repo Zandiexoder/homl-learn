@@ -1,0 +1,7 @@
+# Minimal SearXNG config for Homl Learn's "Discover sources": JSON output must be enabled.
+use_default_settings: true
+server:
+  secret_key: "change-me-to-a-random-string"
+  limiter: false
+search:
+  formats: [html, json]

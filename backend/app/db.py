@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
   title TEXT NOT NULL,
   summary TEXT,
   questions TEXT NOT NULL DEFAULT '[]',
+  overview_pending INTEGER NOT NULL DEFAULT 0,
   created_at REAL NOT NULL,
   updated_at REAL NOT NULL
 );
@@ -121,6 +122,7 @@ def init_db() -> None:
             "UPDATE sources SET status='failed', error='Interrupted by a server restart' "
             "WHERE status IN ('queued','processing')"
         )
+        conn.execute("UPDATE notebooks SET overview_pending=0")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
