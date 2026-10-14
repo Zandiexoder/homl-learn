@@ -27,6 +27,8 @@ DEFAULTS: dict[str, Any] = {
     "video": {"palette": "deep-space", "max_custom_scenes": 3},
     # Optional SearXNG instance for "Discover sources".
     "search": {"base_url": ""},
+    # Language for Studio outputs, podcasts and videos when a request doesn't name one.
+    "general": {"language": ""},
 }
 
 SECRET_FIELDS = {"api_key"}
@@ -91,7 +93,7 @@ def save(update: dict) -> dict:
             _apply_secret(raw[section], update[section])
     if "roles" in update:
         raw["roles"] = _merge(raw["roles"], update["roles"])
-    for section in ("video", "search"):
+    for section in ("video", "search", "general"):
         if section in update:
             raw[section] = _merge(raw[section], update[section])
     db.set_setting(KEY, raw)
@@ -116,3 +118,8 @@ def role(name: str) -> tuple[dict, str]:
     if not model:
         raise LookupError(f"Pick a model for '{name}' in Settings.")
     return conn, model
+
+
+def output_language(options: dict) -> str:
+    """The language a generated output should use: the request's, else the default from Settings."""
+    return (options.get("language") or load_raw()["general"].get("language") or "").strip()

@@ -15,6 +15,7 @@ export function NotebookPage() {
   const [title, setTitle] = useState("");
   const [model, setModel] = useState<string>("");
   const [focusSource, setFocusSource] = useState<string | null>(null);
+  const [question, setQuestion] = useState<string | null>(null);
   const sources = usePolled<Source[]>(`/notebooks/${id}/sources`, busySources);
   const artifacts = usePolled<Artifact[]>(`/notebooks/${id}/artifacts`, busyArtifacts);
   const notes = usePolled<Note[]>(`/notebooks/${id}/notes`, () => false);
@@ -68,9 +69,10 @@ export function NotebookPage() {
       <main className="workspace">
         <SourcesPanel notebookId={notebook.id} sources={sources.data ?? []} reload={() => { sources.reload(); nb.reload(); }} focusId={focusSource} />
         <ChatPanel key={notebook.id} notebook={notebook} readyCount={readyCount} onNoteSaved={notes.reload}
+          onNotebookChange={nb.setData} pendingQuestion={question} onQuestionTaken={() => setQuestion(null)}
           onOpenSource={(sid) => { setFocusSource(null); requestAnimationFrame(() => setFocusSource(sid)); }} />
         <StudioPanel notebookId={notebook.id} artifacts={artifacts.data ?? []} notes={notes.data ?? []}
-          reloadArtifacts={artifacts.reload} reloadNotes={notes.reload} />
+          reloadArtifacts={artifacts.reload} reloadNotes={notes.reload} onAsk={setQuestion} />
       </main>
     </div>
   );

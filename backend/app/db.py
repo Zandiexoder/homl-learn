@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
   summary TEXT,
   questions TEXT NOT NULL DEFAULT '[]',
   overview_pending INTEGER NOT NULL DEFAULT 0,
+  chat_config TEXT NOT NULL DEFAULT '{}',
   created_at REAL NOT NULL,
   updated_at REAL NOT NULL
 );
@@ -80,7 +81,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 """
 
-JSON_COLUMNS = {"meta", "citations", "progress", "options", "data", "questions"}
+JSON_COLUMNS = {"meta", "citations", "progress", "options", "data", "questions", "chat_config"}
 LIST_COLUMNS = {"citations", "questions"}
 
 
@@ -110,9 +111,25 @@ def tx() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS won't add them to an existing
+# database, so they are added here when missing.
+MIGRATIONS: list[tuple[str, str, str]] = [
+    ("notebooks", "overview_pending", "INTEGER NOT NULL DEFAULT 0"),
+    ("notebooks", "chat_config", "TEXT NOT NULL DEFAULT '{}'"),
+]
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    for table, column, decl in MIGRATIONS:
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
 def init_db() -> None:
     with tx() as conn:
         conn.executescript(SCHEMA)
+        migrate(conn)
         # Jobs that were running when the server stopped will never finish.
         conn.execute(
             "UPDATE artifacts SET status='failed', error='Interrupted by a server restart' "

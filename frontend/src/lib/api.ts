@@ -69,12 +69,15 @@ export const fileUrl = (rel: string) => `/api/files/${rel.split("/").map(encodeU
 
 // ---------------------------------------------------------------- types
 
+export type ChatConfig = { style?: "default" | "guide" | "analyst" | "custom"; length?: "shorter" | "default" | "longer"; custom?: string };
+
 export type Notebook = {
   id: string;
   title: string;
   summary: string | null;
   questions: string[];
   overview_pending: number;
+  chat_config: ChatConfig;
   created_at: number;
   updated_at: number;
   source_count?: number;
@@ -149,6 +152,7 @@ export type Settings = {
   stt: { preset: string; kind: string; base_url: string; model: string; project: string; has_key?: boolean; api_key?: string };
   video: { palette: string; max_custom_scenes: number };
   search: { base_url: string };
+  general: { language: string };
 };
 
 export type SettingsResponse = {

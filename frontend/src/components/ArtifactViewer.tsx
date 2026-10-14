@@ -9,7 +9,9 @@ type Question = { question: string; options: string[]; answer: number; explanati
 type MindNode = { label: string; children?: MindNode[] };
 type Event = { date: string; title: string; detail?: string; source?: string };
 
-export function ArtifactViewer({ artifact, onClose, onNoteSaved }: { artifact: Artifact; onClose: () => void; onNoteSaved: () => void }) {
+export function ArtifactViewer({ artifact, onClose, onNoteSaved, onAsk }: {
+  artifact: Artifact; onClose: () => void; onNoteSaved: () => void; onAsk?: (question: string) => void;
+}) {
   const d = artifact.data;
   const [saved, setSaved] = useState(false);
 
@@ -32,7 +34,14 @@ export function ArtifactViewer({ artifact, onClose, onNoteSaved }: { artifact: A
     );
   } else if (artifact.kind === "flashcards") body = <Flashcards cards={d.cards as Card[]} />;
   else if (artifact.kind === "quiz") body = <Quiz questions={d.questions as Question[]} />;
-  else if (artifact.kind === "mindmap") body = <ul className="mm-children" style={{ borderLeft: 0, margin: 0, paddingLeft: 0 }}><MindMapNode node={d as unknown as MindNode} depth={0} /></ul>;
+  else if (artifact.kind === "mindmap") body = (
+    <>
+      <p className="small muted" style={{ margin: 0 }}>Open a topic with + / −. Choose “Ask” to discuss it in the chat.</p>
+      <ul className="mm-children" style={{ borderLeft: 0, margin: 0, paddingLeft: 0 }}>
+        <MindMapNode node={d as unknown as MindNode} depth={0} path={[]} onAsk={onAsk && ((q) => { onAsk(q); onClose(); })} />
+      </ul>
+    </>
+  );
   else if (artifact.kind === "timeline") body = <TimelineView events={d.events as Event[]} cast={d.cast as { name: string; description: string }[]} />;
   else body = <pre className="quote">{JSON.stringify(d, null, 2)}</pre>;
 
@@ -92,19 +101,26 @@ function Quiz({ questions }: { questions: Question[] }) {
   );
 }
 
-function MindMapNode({ node, depth }: { node: MindNode; depth: number }) {
+function MindMapNode({ node, depth, path, onAsk }: { node: MindNode; depth: number; path: string[]; onAsk?: (q: string) => void }) {
   const [open, setOpen] = useState(depth < 2);
   const kids = node.children ?? [];
+  const trail = [...path, node.label];
+  const question = depth === 0
+    ? `Give me an overview of ${node.label} based on the sources.`
+    : `Discuss what the sources say about ${node.label}, in the context of ${trail.slice(0, -1).join(" › ")}.`;
   return (
     <li>
-      <button className="mm-node" onClick={() => setOpen((o) => !o)} aria-expanded={kids.length ? open : undefined}
-        style={depth === 0 ? { background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", fontWeight: 600 } : undefined}>
-        {kids.length > 0 && <span className="mono small">{open ? "−" : "+"}</span>}
-        {node.label}
-      </button>
+      <span className="row" style={{ gap: 4 }}>
+        <button className="mm-node" onClick={() => setOpen((o) => !o)} aria-expanded={kids.length ? open : undefined}
+          style={depth === 0 ? { background: "var(--accent)", color: "#fff", borderColor: "var(--accent)", fontWeight: 600 } : undefined}>
+          {kids.length > 0 && <span className="mono small">{open ? "−" : "+"}</span>}
+          {node.label}
+        </button>
+        {onAsk && <button className="btn sm ghost" onClick={() => onAsk(question)} aria-label={`Ask about ${node.label}`}>Ask</button>}
+      </span>
       {open && kids.length > 0 && (
         <ul className="mm-children">
-          {kids.map((c, i) => <MindMapNode key={i} node={c} depth={depth + 1} />)}
+          {kids.map((c, i) => <MindMapNode key={i} node={c} depth={depth + 1} path={trail} onAsk={onAsk} />)}
         </ul>
       )}
     </li>

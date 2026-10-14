@@ -45,6 +45,7 @@ export function SettingsPage() {
       <div className="settings">
         <nav aria-label="Settings sections">
           <a href="#models">Language models</a>
+          <a href="#language">Output language</a>
           <a href="#voice">Voice</a>
           <a href="#stt">Speech to text</a>
           <a href="#retrieval">Search and embeddings</a>
@@ -53,6 +54,7 @@ export function SettingsPage() {
         </nav>
         <div className="settings-main">
           <ModelsSection data={data} save={save} />
+          <LanguageSection data={data} save={save} />
           <VoiceSection data={data} save={save} />
           <SttSection data={data} save={save} />
           <RetrievalSection data={data} save={save} />
@@ -234,6 +236,31 @@ function ModelsSection({ data, save }: SectionProps) {
           </table>
         </div>
       </div>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ language
+
+function LanguageSection({ data, save }: SectionProps) {
+  const [language, setLanguage] = useState(data.settings.general?.language ?? "");
+  const [status, setStatus] = useState<Status>(null);
+  return (
+    <section id="language" className="section">
+      <div>
+        <h2>Output language</h2>
+        <p className="muted" style={{ margin: "4px 0 0" }}>The language for Studio outputs, Audio Overviews and videos when you don't pick one. Chat answers in the language you ask in.</p>
+      </div>
+      <form className="row wrap" onSubmit={async (e) => { e.preventDefault(); await save({ general: { language } }); setStatus({ kind: "ok", text: "Saved." }); }}>
+        <label className="field grow" style={{ maxWidth: 360 }}>Default language
+          <input className="input" list="languages" value={language} placeholder="Same as the sources" onChange={(e) => setLanguage(e.target.value)} />
+        </label>
+        <datalist id="languages">
+          {["English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Polish", "Japanese", "Korean", "Chinese", "Hindi", "Arabic"].map((l) => <option key={l} value={l} />)}
+        </datalist>
+        <button className="btn accent" style={{ alignSelf: "flex-end" }}>Save</button>
+      </form>
+      <StatusLine status={status} />
     </section>
   );
 }

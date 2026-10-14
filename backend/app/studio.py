@@ -78,8 +78,9 @@ def build_prompt(kind: str, options: dict, sources: list[dict]) -> str:
         extra.append(f"Focus on: {options['focus']}")
     if options.get("prompt"):
         extra.append(f"The reader's instructions: {options['prompt']}")
-    if options.get("language"):
-        extra.append(f"Write in {options['language']}.")
+    language = settings_store.output_language(options)
+    if language:
+        extra.append(f"Write in {language}.")
     return "\n".join([instructions, COMMON, *extra, "", retrieval.format_sources(sources)])
 
 

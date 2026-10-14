@@ -6,6 +6,10 @@ import path from "node:path";
 
 process.env.DATA_DIR ??= path.resolve("test-data");
 const { renderJob, staticCheck } = await import("../server.mjs");
+if (!process.env.BROWSER_EXECUTABLE) {
+  const { ensureBrowser } = await import("@remotion/renderer");
+  await ensureBrowser();
+}
 
 const fps = 30;
 const lines = (texts) => texts.map((text, i) => ({ text, start: i * 30, end: i * 30 + 25 }));

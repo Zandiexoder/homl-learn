@@ -21,6 +21,29 @@ Do not fill gaps from general knowledge unless the user asks you to, and then la
 - Write in the language of the question."""
 
 
+STYLES = {
+    "default": "",
+    "guide": "Act as a learning guide: check what the user already understands, explain step by step, "
+             "and end with one short question that helps them think it through.",
+    "analyst": "Act as an analyst: be concise and structured, compare positions across sources, and "
+               "point out disagreements, assumptions and gaps in the evidence.",
+}
+LENGTHS = {
+    "shorter": "Keep answers short: two or three sentences unless more is essential.",
+    "default": "",
+    "longer": "Give thorough, detailed answers that cover nuances and related points from the sources.",
+}
+
+
+def system_prompt(config: dict) -> str:
+    """The chat system prompt with the notebook's configured style and length."""
+    extra = [STYLES.get(config.get("style", "default"), ""), LENGTHS.get(config.get("length", "default"), "")]
+    if config.get("style") == "custom" and config.get("custom"):
+        extra.append("The user's instructions for how to respond: " + str(config["custom"])[:2000])
+    extra = [e for e in extra if e]
+    return SYSTEM + ("\n\n" + "\n".join(extra) if extra else "")
+
+
 def build_user_turn(question: str, excerpts: list[dict]) -> str:
     blocks = []
     for i, ex in enumerate(excerpts, start=1):
@@ -69,7 +92,9 @@ async def answer(notebook_id: str, question: str) -> AsyncIterator[dict]:
                            "content": question, "citations": [], "created_at": db.now()})
     parts: list[str] = []
     try:
-        async for piece in llm.stream_chat(conn, model, SYSTEM, messages, effort="low"):
+        notebook = db.fetch_one("SELECT chat_config FROM notebooks WHERE id=?", (notebook_id,)) or {}
+        system = system_prompt(notebook.get("chat_config") or {})
+        async for piece in llm.stream_chat(conn, model, system, messages, effort="low"):
             parts.append(piece)
             yield {"type": "delta", "text": piece}
     except llm.LLMError as exc:

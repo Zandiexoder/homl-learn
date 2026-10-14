@@ -107,3 +107,36 @@ def test_timeline_frames_and_subtitles(tmp_path):
 def test_similarity_ignores_punctuation():
     assert pipeline.similarity("Hello, world!", "hello world") == 1.0
     assert pipeline.similarity("The cat sat", "A dog ran away") < 0.5
+
+
+def test_chat_system_prompt_applies_style_and_length():
+    from app import chat
+
+    assert chat.system_prompt({}) == chat.SYSTEM
+    guided = chat.system_prompt({"style": "guide", "length": "shorter"})
+    assert "learning guide" in guided and "short" in guided
+    custom = chat.system_prompt({"style": "custom", "custom": "Answer like a pirate."})
+    assert "Answer like a pirate." in custom
+
+
+def test_migration_adds_missing_columns(data_dir):
+    import sqlite3
+
+    from app import db
+
+    path = data_dir / "old.sqlite3"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE notebooks (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT, "
+                 "questions TEXT NOT NULL DEFAULT '[]', created_at REAL NOT NULL, updated_at REAL NOT NULL)")
+    conn.execute("INSERT INTO notebooks VALUES ('n1', 'Old', NULL, '[]', 0, 0)")
+    db.migrate(conn)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(notebooks)")}
+    assert {"overview_pending", "chat_config"} <= cols
+    assert conn.execute("SELECT chat_config FROM notebooks").fetchone()[0] == "{}"
+    db.migrate(conn)  # idempotent
+
+
+def test_output_language_falls_back_to_settings():
+    settings_store.save({"general": {"language": "Spanish"}})
+    assert settings_store.output_language({}) == "Spanish"
+    assert settings_store.output_language({"language": "French"}) == "French"

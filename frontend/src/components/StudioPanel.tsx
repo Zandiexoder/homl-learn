@@ -24,22 +24,26 @@ const MORE: Kind[] = [
 ];
 const LABEL: Record<string, string> = Object.fromEntries([...MAIN, ...MORE].map((k) => [k.kind, k.label]));
 
-export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, reloadNotes }: {
+export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, reloadNotes, onAsk }: {
   notebookId: string;
   artifacts: Artifact[];
   notes: Note[];
   reloadArtifacts: () => void;
   reloadNotes: () => void;
+  onAsk: (question: string) => void;
 }) {
+  const [audioId, setAudioId] = useState<string | null>(null);
   const [customize, setCustomize] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Artifact | null>(null);
   const [editing, setEditing] = useState<Note | "new" | null>(null);
   const navigate = useNavigate();
-  const latestAudio = artifacts.find((a) => a.kind === "audio" && a.status === "done");
+  const readyAudio = artifacts.filter((a) => a.kind === "audio" && a.status === "done");
+  const currentAudio = readyAudio.find((a) => a.id === audioId) ?? readyAudio[0];
 
   function open(a: Artifact) {
     if (a.kind === "video") navigate(`/notebooks/${notebookId}/video/${a.id}`);
-    else if (a.status === "done" && a.kind !== "audio") setViewing(a);
+    else if (a.kind === "audio") a.status === "done" && setAudioId(a.id);
+    else if (a.status === "done") setViewing(a);
   }
 
   return (
@@ -57,13 +61,13 @@ export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, rel
         ))}
       </div>
 
-      {latestAudio && <AudioPlayer artifact={latestAudio} />}
+      {currentAudio && <AudioPlayer key={currentAudio.id} artifact={currentAudio} />}
 
       {artifacts.length > 0 && (
         <div className="stack" style={{ gap: 6 }}>
           <h3 style={{ fontSize: 13, fontWeight: 600 }}>Outputs</h3>
           {artifacts.map((a) => (
-            <OutputRow key={a.id} artifact={a} onOpen={() => open(a)} onChanged={reloadArtifacts} />
+            <OutputRow key={a.id} artifact={a} onOpen={() => open(a)} onChanged={reloadArtifacts} playing={a.id === currentAudio?.id} />
           ))}
         </div>
       )}
@@ -86,13 +90,13 @@ export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, rel
         <CustomizeDialog kind={customize} notebookId={notebookId} onClose={() => setCustomize(null)}
           onCreated={(a) => { reloadArtifacts(); if (a.kind === "video") navigate(`/notebooks/${notebookId}/video/${a.id}`); }} />
       )}
-      {viewing && <ArtifactViewer artifact={viewing} onClose={() => setViewing(null)} onNoteSaved={reloadNotes} />}
+      {viewing && <ArtifactViewer artifact={viewing} onClose={() => setViewing(null)} onNoteSaved={reloadNotes} onAsk={onAsk} />}
       {editing && <NoteEditor notebookId={notebookId} note={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={reloadNotes} />}
     </section>
   );
 }
 
-function OutputRow({ artifact: a, onOpen, onChanged }: { artifact: Artifact; onOpen: () => void; onChanged: () => void }) {
+function OutputRow({ artifact: a, onOpen, onChanged, playing }: { artifact: Artifact; onOpen: () => void; onChanged: () => void; playing?: boolean }) {
   const p = a.progress;
   const busy = a.status === "queued" || a.status === "running";
   const pct = p.total ? Math.round(((p.done ?? 0) / p.total) * 100) : null;
@@ -112,12 +116,12 @@ function OutputRow({ artifact: a, onOpen, onChanged }: { artifact: Artifact; onO
     onChanged();
   }
   return (
-    <div className="output-item" role="group" aria-label={a.title}>
+    <div className="output-item" role="group" aria-label={a.title} style={playing ? { borderColor: "var(--amber)", background: "var(--amber-soft)" } : undefined}>
       <button className="grow" onClick={onOpen} disabled={busy && a.kind !== "video"}
         style={{ border: 0, background: "none", textAlign: "left", padding: 0, display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
         <span style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</span>
         <span className="mono small muted">
-          {LABEL[a.kind] ?? a.kind}
+          {LABEL[a.kind] ?? a.kind}{playing && " · in player"}
           {busy && ` · ${stageText[p.stage ?? ""] ?? "Queued"}${pct !== null ? ` ${pct}%` : ""}…`}
           {a.status === "failed" && " · failed"}
         </span>
@@ -163,7 +167,7 @@ function CustomizeDialog({ kind, notebookId, onClose, onCreated }: { kind: strin
       <legend className="field" style={{ marginBottom: 6 }}>{label}</legend>
       <div className="tabs">
         {options.map(([v, l]) => (
-          <button key={v} type="button" className="tab" aria-selected={opts[key] === v} onClick={() => set(key, v)}>{l}</button>
+          <button key={v} type="button" className="tab" aria-pressed={opts[key] === v} onClick={() => set(key, v)}>{l}</button>
         ))}
       </div>
     </fieldset>
@@ -251,8 +255,8 @@ function NoteEditor({ notebookId, note, onClose, onSaved }: { notebookId: string
         <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <div className="tabs">
-        <button className="tab" aria-selected={!preview} onClick={() => setPreview(false)}>Edit</button>
-        <button className="tab" aria-selected={preview} onClick={() => setPreview(true)}>Preview</button>
+        <button className="tab" aria-pressed={!preview} onClick={() => setPreview(false)}>Edit</button>
+        <button className="tab" aria-pressed={preview} onClick={() => setPreview(true)}>Preview</button>
       </div>
       {preview ? <div className="card"><Markdown text={content || "*Empty*"} /></div> : (
         <textarea className="textarea" rows={14} value={content} onChange={(e) => setContent(e.target.value)} aria-label="Note text" />

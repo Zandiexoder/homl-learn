@@ -7,8 +7,8 @@ A self-hosted research notebook in the spirit of NotebookLM. Add sources, chat w
 | Area | Features |
 |---|---|
 | **Sources** | PDF, Word, Markdown/text, web pages, YouTube (transcripts), audio and video files (transcribed with speakers). Web discovery through SearXNG. Pick which sources each answer uses. |
-| **Chat** | Answers grounded in your sources, with numbered citations that open the quoted passage. Notebook summary and suggested questions. Ask by voice. Save answers as notes. |
-| **Studio** | Study guide, briefing doc, FAQ, custom reports, timeline with cast of characters, mind map, flashcards and quizzes. |
+| **Chat** | Answers grounded in your sources, with numbered citations that open the quoted passage. Notebook summary and suggested questions. Ask by voice. Save answers as notes. Configure each notebook's chat: default, learning guide, analyst or your own instructions, and shorter or longer answers. |
+| **Studio** | Study guide, briefing doc, FAQ, custom reports, timeline with cast of characters, mind map (ask the chat about any topic in it), flashcards and quizzes. Outputs use a default language you set in Settings, or one you pick per output. |
 | **Audio Overview** | Two hosts discuss your sources: deep dive, brief, critique or debate, three lengths, any language, a voice of your choice for each host. **Join the conversation**: interrupt, ask a question out loud, hear the hosts answer, then carry on. |
 | **Video Overview** | The LLM follows the bundled [video-creation skill](backend/app/video/SKILL.md) to write a script and scene plan. A Remotion scene kit (14 animated scene types) draws it, and the LLM may write its own animated scenes, which are type-checked and sandboxed. Narration is voiced and the video gets subtitles, chapters and loudness normalisation, then is checked automatically (10 checks). Edit any line and re-voice just that line, or redraw one scene. |
 
@@ -76,6 +76,9 @@ The renderer container runs headless Chromium and executes scene code written by
 Rendering is CPU-bound. In testing, a 50-second video with 16 scenes took about 2 minutes to render with 4 browser tabs, so budget roughly two to three times the video's length unless you raise `RENDER_CONCURRENCY` on a bigger machine.
 
 ## Development
+
+CI (`.github/workflows/ci.yml`) runs the backend tests, builds the frontend, type-checks and test-renders the scene kit, and builds both Docker images.
+
 
 ```bash
 # backend

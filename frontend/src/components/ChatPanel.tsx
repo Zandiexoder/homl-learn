@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { api, streamEvents, type Citation, type Message, type Notebook } from "../lib/api";
+import { api, streamEvents, type ChatConfig, type Citation, type Message, type Notebook } from "../lib/api";
 import { startRecording } from "../lib/recorder";
+import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
 
 type Pending = { question: string; text: string; citations: Citation[]; error?: string };
 
-export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved }: {
+export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved, onNotebookChange, pendingQuestion, onQuestionTaken }: {
   notebook: Notebook;
   readyCount: number;
   onOpenSource: (sourceId: string) => void;
   onNoteSaved: () => void;
+  onNotebookChange: (nb: Notebook) => void;
+  /** A question sent from elsewhere (e.g. a mind map node) to ask now. */
+  pendingQuestion?: string | null;
+  onQuestionTaken?: () => void;
 }) {
+  const [configuring, setConfiguring] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [input, setInput] = useState("");
@@ -51,6 +57,14 @@ export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved }: {
       setPending({ ...state, error: (e as Error).message });
     }
   }
+
+  useEffect(() => {
+    if (pendingQuestion && !pending) {
+      onQuestionTaken?.();
+      ask(pendingQuestion);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion]);
 
   async function toggleVoice() {
     setVoiceError(null);
@@ -105,7 +119,10 @@ export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved }: {
     <section className="panel pane-chat" aria-label="Chat">
       <div className="panel-head" style={{ padding: "14px 20px 8px" }}>
         <h2>Chat</h2>
-        {messages.length > 0 && <button className="btn sm" onClick={clear}>Clear</button>}
+        <div className="row">
+          <button className="btn sm" onClick={() => setConfiguring(true)}>Configure</button>
+          {messages.length > 0 && <button className="btn sm" onClick={clear}>Clear</button>}
+        </div>
       </div>
       <div className="chat-scroll" ref={scrollRef}>
         <div className="chat-col">
@@ -168,6 +185,60 @@ export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved }: {
           </button>
         </label>
       </form>
+      {configuring && (
+        <ChatConfigDialog notebook={notebook} onClose={() => setConfiguring(false)}
+          onSaved={(nb) => { onNotebookChange(nb); setConfiguring(false); }} />
+      )}
     </section>
+  );
+}
+
+function ChatConfigDialog({ notebook, onClose, onSaved }: { notebook: Notebook; onClose: () => void; onSaved: (nb: Notebook) => void }) {
+  const [cfg, setCfg] = useState<ChatConfig>({ style: "default", length: "default", custom: "", ...notebook.chat_config });
+  const [error, setError] = useState<string | null>(null);
+  const styles: [NonNullable<ChatConfig["style"]>, string, string][] = [
+    ["default", "Default", "Clear answers grounded in your sources."],
+    ["guide", "Learning guide", "Explains step by step and checks your understanding."],
+    ["analyst", "Analyst", "Concise, structured, points out gaps and disagreements."],
+    ["custom", "Custom", "Your own instructions."],
+  ];
+  async function save() {
+    try {
+      onSaved(await api<Notebook>(`/notebooks/${notebook.id}`, { method: "PATCH", body: { chat_config: cfg } }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <Dialog title="Configure chat" onClose={onClose}>
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }} className="stack">
+        <legend className="field" style={{ marginBottom: 8 }}>Conversational style</legend>
+        {styles.map(([value, label, hint]) => (
+          <label key={value} className="card row" style={{ alignItems: "flex-start", gap: 12, cursor: "pointer", borderColor: cfg.style === value ? "var(--accent)" : undefined }}>
+            <input type="radio" name="chat-style" checked={cfg.style === value} onChange={() => setCfg({ ...cfg, style: value })}
+              style={{ width: 18, height: 18, marginTop: 2, accentColor: "var(--accent)" }} />
+            <span><strong>{label}</strong><br /><span className="small muted">{hint}</span></span>
+          </label>
+        ))}
+      </fieldset>
+      {cfg.style === "custom" && (
+        <label className="field">How should the chat respond?
+          <textarea className="textarea" rows={3} maxLength={2000} value={cfg.custom ?? ""} placeholder="e.g. Answer as a tutor for a first-year student, and suggest a related question each time."
+            onChange={(e) => setCfg({ ...cfg, custom: e.target.value })} />
+        </label>
+      )}
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend className="field" style={{ marginBottom: 6 }}>Response length</legend>
+        <div className="tabs">
+          {(["shorter", "default", "longer"] as const).map((l) => (
+            <button key={l} type="button" className="tab" aria-pressed={cfg.length === l} onClick={() => setCfg({ ...cfg, length: l })}>
+              {{ shorter: "Shorter", default: "Default", longer: "Longer" }[l]}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {error && <div className="error-box">{error}</div>}
+      <button className="btn accent" onClick={save}>Save</button>
+    </Dialog>
   );
 }

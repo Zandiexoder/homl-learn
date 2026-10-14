@@ -87,8 +87,9 @@ def brief_prompt(options: dict, sources: list[dict]) -> str:
         parts.append(f"Focus: {options['focus']}")
     if options.get("audience"):
         parts.append(f"Audience: {options['audience']}")
-    if options.get("language"):
-        parts.append(f"Narration language: {options['language']}.")
+    language = settings_store.output_language(options)
+    if language:
+        parts.append(f"Narration language: {language}.")
     return "\n".join(parts) + "\n\n" + retrieval.format_sources(sources)
 
 

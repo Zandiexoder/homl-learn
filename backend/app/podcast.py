@@ -48,8 +48,9 @@ def script_prompt(options: dict, sources: list[dict]) -> str:
     ]
     if options.get("focus"):
         lines.append(f"The listener asked the hosts to focus on: {options['focus']}")
-    if options.get("language"):
-        lines.append(f"The whole conversation is in {options['language']}.")
+    language = settings_store.output_language(options)
+    if language:
+        lines.append(f"The whole conversation is in {language}.")
     return "\n".join(lines) + "\n\n" + retrieval.format_sources(sources)
 
 

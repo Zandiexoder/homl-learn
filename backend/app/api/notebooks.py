@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from typing import Literal
 import tempfile
 from pathlib import Path
 
@@ -53,8 +54,15 @@ class NotebookIn(BaseModel):
     title: str = "Untitled notebook"
 
 
+class ChatConfig(BaseModel):
+    style: Literal["default", "guide", "analyst", "custom"] = "default"
+    length: Literal["shorter", "default", "longer"] = "default"
+    custom: str = ""
+
+
 class NotebookPatch(BaseModel):
-    title: str
+    title: str | None = None
+    chat_config: ChatConfig | None = None
 
 
 @router.get("/notebooks")
@@ -85,7 +93,12 @@ def get_notebook(notebook_id: str) -> dict:
 @router.patch("/notebooks/{notebook_id}")
 def rename_notebook(notebook_id: str, body: NotebookPatch) -> dict:
     notebook_or_404(notebook_id)
-    db.update("notebooks", notebook_id, {"title": body.title.strip()[:200] or "Untitled notebook", "updated_at": db.now()})
+    values: dict = {"updated_at": db.now()}
+    if body.title is not None:
+        values["title"] = body.title.strip()[:200] or "Untitled notebook"
+    if body.chat_config is not None:
+        values["chat_config"] = body.chat_config.model_dump()
+    db.update("notebooks", notebook_id, values)
     return notebook_or_404(notebook_id)
 
 
