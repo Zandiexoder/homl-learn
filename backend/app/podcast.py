@@ -107,10 +107,11 @@ async def generate(artifact_id: str) -> None:
                                              "progress": {"stage": stage, "done": done, "total": total}})
 
     progress("script")
-    sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None)
+    conn, model = settings_store.role("studio")
+    sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None,
+                                       budget_chars=retrieval.budget_for(conn))
     if not sources:
         raise ValueError("Select at least one ready source first.")
-    conn, model = settings_store.role("studio")
     raw = await llm.complete(conn, model, "", [{"role": "user", "content": script_prompt(options, sources)}],
                              json_mode=True, effort="medium")
     data = jsonutil.extract_json(raw)

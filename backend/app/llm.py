@@ -132,7 +132,14 @@ def _anthropic_client(conn: dict) -> anthropic.AsyncAnthropic:
 async def _anthropic_stream(conn: dict, model: str, system: str, messages: list[Message],
                             effort: str | None) -> AsyncIterator[str]:
     client = _anthropic_client(conn)
-    params: dict = {"model": model, "max_tokens": 64000, "messages": messages}
+    # Claude 3 models cap output far lower than current ones.
+    if model.startswith("claude-3-5"):
+        max_tokens = 8192
+    elif model.startswith("claude-3-") and not model.startswith("claude-3-7"):
+        max_tokens = 4096
+    else:
+        max_tokens = 64000
+    params: dict = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if system:
         params["system"] = system
     extra: dict = {}

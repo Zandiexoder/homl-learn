@@ -127,13 +127,16 @@ export type Preset = {
   model?: string;
   model_id?: string;
   needs_key?: boolean;
+  context_tokens?: number;
   cloning?: boolean;
   projects?: boolean;
   stt?: boolean;
   note?: string;
 };
 
-export type Connection = { preset: string; name: string; kind: string; base_url: string; has_key?: boolean; api_key?: string; model?: string };
+export type Connection = {
+  preset: string; name: string; kind: string; base_url: string; has_key?: boolean; api_key?: string; model?: string; context_tokens?: number;
+};
 
 export type Settings = {
   connections: Record<string, Connection>;

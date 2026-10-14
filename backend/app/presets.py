@@ -31,7 +31,7 @@ LLM_PRESETS: list[dict] = [
     {"id": "cerebras", "name": "Cerebras", "kind": "openai", "location": "cloud",
      "base_url": "https://api.cerebras.ai/v1", "model": "", "needs_key": True},
     {"id": "ollama", "name": "Ollama", "kind": "openai", "location": "local",
-     "base_url": "http://ollama:11434/v1", "model": "qwen3:32b", "needs_key": False},
+     "base_url": "http://ollama:11434/v1", "model": "qwen3:32b", "needs_key": False, "context_tokens": 32768},
     {"id": "lmstudio", "name": "LM Studio", "kind": "openai", "location": "local",
      "base_url": "http://host.docker.internal:1234/v1", "model": "", "needs_key": False},
     {"id": "vllm", "name": "vLLM", "kind": "openai", "location": "local",

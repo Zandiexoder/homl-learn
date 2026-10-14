@@ -51,7 +51,15 @@ async def answer(notebook_id: str, question: str) -> AsyncIterator[dict]:
         "SELECT role, content FROM messages WHERE notebook_id=? ORDER BY created_at DESC LIMIT ?",
         (notebook_id, HISTORY_TURNS),
     )[::-1]
-    messages = [{"role": m["role"], "content": m["content"]} for m in history]
+    messages: list[dict] = []
+    for m in history:
+        # A failed answer leaves two user turns in a row; merge them so every API accepts the history.
+        if messages and messages[-1]["role"] == m["role"]:
+            messages[-1]["content"] += "\n\n" + m["content"]
+        else:
+            messages.append({"role": m["role"], "content": m["content"]})
+    if messages and messages[-1]["role"] == "user":
+        messages.pop()
     if not excerpts:
         messages.append({"role": "user", "content": f"(No sources are selected or ready.)\n\nQuestion: {question}"})
     else:
@@ -86,11 +94,11 @@ OVERVIEW_PROMPT = """Read these sources and reply with JSON only:
 
 
 async def refresh_overview(notebook_id: str) -> None:
-    sources = retrieval.gather_sources(notebook_id, budget_chars=60_000)
+    conn, model = settings_store.role("chat")
+    sources = retrieval.gather_sources(notebook_id, budget_chars=min(60_000, retrieval.budget_for(conn)))
     if not sources:
         db.update("notebooks", notebook_id, {"summary": None, "questions": []})
         return
-    conn, model = settings_store.role("chat")
     raw = await llm.complete(conn, model, "", [{"role": "user", "content": OVERVIEW_PROMPT +
                                                 retrieval.format_sources(sources)}],
                              json_mode=True, effort="low")

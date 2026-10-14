@@ -82,7 +82,7 @@ function ModelsSection({ data, save }: SectionProps) {
     const p = presets.llm[0];
     return c
       ? { id: id!, ...c, api_key: "", model: settings.roles.chat?.connection === id ? settings.roles.chat.model : c.model ?? "" }
-      : { id: p.id, preset: p.id, name: p.name, kind: p.kind, base_url: p.base_url, api_key: "", model: p.model ?? "" };
+      : { id: p.id, preset: p.id, name: p.name, kind: p.kind, base_url: p.base_url, api_key: "", model: p.model ?? "", context_tokens: p.context_tokens };
   }
 
   function pickPreset(p: Preset) {
@@ -90,7 +90,7 @@ function ModelsSection({ data, save }: SectionProps) {
     if (p.id === "custom") for (let n = 1; conns[id]; n++) id = `custom-${n}`;
     const existing = conns[id];
     setEditingId(existing ? id : null);
-    setDraft(existing ? draftFor(id) : { id, preset: p.id, name: p.name, kind: p.kind, base_url: p.base_url, api_key: "", model: p.model ?? "" });
+    setDraft(existing ? draftFor(id) : { id, preset: p.id, name: p.name, kind: p.kind, base_url: p.base_url, api_key: "", model: p.model ?? "", context_tokens: p.context_tokens });
     setModels([]);
     setStatus(null);
   }
@@ -189,6 +189,10 @@ function ModelsSection({ data, save }: SectionProps) {
             <button type="button" className="btn" onClick={loadModels}>List</button>
           </div>
           <datalist id="llm-models">{models.map((m) => <option key={m} value={m} />)}</datalist>
+        </label>
+        <label className="field">Context window (tokens) <span className="hint">(sizes how much source text is sent; blank = 100,000)</span>
+          <input className="input mono" type="number" min={2048} step={1024} value={draft.context_tokens ?? ""}
+            onChange={(e) => setDraft({ ...draft, context_tokens: e.target.value ? Number(e.target.value) : undefined })} />
         </label>
         {draft.kind === "openai" && draft.preset === "custom" && (
           <label className="field">Protocol

@@ -140,6 +140,15 @@ async def search(notebook_id: str, query: str, source_ids: list[str] | None = No
     ]
 
 
+DEFAULT_CONTEXT_TOKENS = 100_000
+
+
+def budget_for(conn: dict, share: float = 0.6) -> int:
+    """Characters of source text that fit in a connection's context window, leaving room for the reply."""
+    tokens = int(conn.get("context_tokens") or DEFAULT_CONTEXT_TOKENS)
+    return max(8_000, int(tokens * share * 3.5))
+
+
 def gather_sources(notebook_id: str, source_ids: list[str] | None = None, budget_chars: int = 400_000) -> list[dict]:
     """Full text of the selected sources, each trimmed to a fair share of the budget."""
     if source_ids:

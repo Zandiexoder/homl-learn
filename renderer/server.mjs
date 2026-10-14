@@ -4,7 +4,7 @@
 
 import { bundle } from "@remotion/bundler";
 import { ensureBrowser, renderMedia, renderStill, selectComposition } from "@remotion/renderer";
-import { execFile } from "node:child_process";
+import { execFile, fork } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -119,6 +119,25 @@ async function prepareWorkspace(jobDir, custom) {
 const jobs = new Map();
 let queue = Promise.resolve();
 
+/**
+ * Render in a child process: bundling and rendering keep the CPU busy, and doing that in this
+ * process would freeze the HTTP API that the backend polls for progress.
+ */
+function renderInWorker(job) {
+  return new Promise((resolve) => {
+    const child = fork(fileURLToPath(import.meta.url), ["--worker"], { stdio: "inherit" });
+    child.on("message", (update) => Object.assign(job, update));
+    child.on("exit", (code) => {
+      if (job.status !== "done" && job.status !== "failed") {
+        job.status = "failed";
+        job.error = job.error ?? `Renderer worker exited with code ${code}`;
+      }
+      resolve();
+    });
+    child.send({ jobDir: job.jobDir });
+  });
+}
+
 async function renderJob(job) {
   const jobDir = job.jobDir;
   const spec = JSON.parse(await fs.readFile(path.join(jobDir, "spec.json"), "utf8"));
@@ -203,12 +222,7 @@ app.post("/jobs", (req, res) => {
   jobs.set(id, job);
   queue = queue.then(async () => {
     job.status = "running";
-    try {
-      await renderJob(job);
-    } catch (err) {
-      job.status = "failed";
-      job.error = String(err.stack ?? err).slice(0, 4000);
-    }
+    await renderInWorker(job);
   });
   res.json({ id });
 });
@@ -219,7 +233,24 @@ app.get("/jobs/:id", (req, res) => {
   res.json(job);
 });
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv.includes("--worker")) {
+  // Child process: render one job and report progress to the parent.
+  process.once("message", async ({ jobDir }) => {
+    const job = { jobDir, status: "running", stage: "checking", progress: 0, failed: {}, result: null, error: null };
+    const report = () => process.send?.({ status: job.status, stage: job.stage, progress: job.progress, failed: job.failed, result: job.result, error: job.error });
+    const timer = setInterval(report, 1000);
+    try {
+      await renderJob(job);
+    } catch (err) {
+      job.status = "failed";
+      job.error = String(err.stack ?? err).slice(0, 4000);
+    }
+    clearInterval(timer);
+    report();
+    // Exit explicitly: the browser pool can keep handles open.
+    setTimeout(() => process.exit(job.status === "done" ? 0 : 1), 200);
+  });
+} else if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await fs.mkdir(WORK_DIR, { recursive: true });
   if (!BROWSER) await ensureBrowser();
   app.listen(PORT, () => console.log(`renderer listening on :${PORT}`));

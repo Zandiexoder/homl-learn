@@ -419,7 +419,9 @@ async def generate(artifact_id: str, start_at: str = "script") -> None:
 
     if first == 0:
         save("script")
-        sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None)
+        conn, _ = settings_store.role("video")
+        sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None,
+                                           budget_chars=retrieval.budget_for(conn, share=0.45))
         if not sources:
             raise VideoError("Select at least one ready source first.")
         spec = await write_script(options, sources, max_custom)

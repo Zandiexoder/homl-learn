@@ -116,10 +116,11 @@ async def generate(artifact_id: str) -> None:
         return
     db.update("artifacts", artifact_id, {"status": "running", "updated_at": db.now()})
     options = art["options"]
-    sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None)
+    conn, model = settings_store.role("studio")
+    sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None,
+                                       budget_chars=retrieval.budget_for(conn))
     if not sources:
         raise ValueError("Select at least one ready source first.")
-    conn, model = settings_store.role("studio")
     prompt = build_prompt(art["kind"], options, sources)
     is_json = art["kind"] in JSON_KINDS
     messages = [{"role": "user", "content": prompt}]

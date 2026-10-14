@@ -14,6 +14,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
       # Set to true when served over HTTPS (behind a reverse proxy).
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Keep calls to the bundled services off any host-wide HTTP proxy.
+      NO_PROXY: renderer,ollama,kokoro,stt,searxng,localhost,127.0.0.1
+      no_proxy: renderer,ollama,kokoro,stt,searxng,localhost,127.0.0.1
     volumes:
       - homl-data:/data
     networks: [default, render]
@@ -35,6 +38,9 @@ services:
   ollama:
     profiles: [local-llm]
     image: ollama/ollama:0.40.4
+    environment:
+      # Ollama's default context is small; long sources would be cut off silently.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-32768}
     volumes:
       - ollama:/root/.ollama
     deploy:
