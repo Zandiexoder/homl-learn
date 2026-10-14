@@ -10,3 +10,4 @@ renderer/test-data/
 frontend/dist/
 .env
 *.egg-info/
+*.tsbuildinfo
