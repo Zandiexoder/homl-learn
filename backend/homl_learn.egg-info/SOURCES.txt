@@ -1,6 +1,0 @@
-pyproject.toml
-homl_learn.egg-info/PKG-INFO
-homl_learn.egg-info/SOURCES.txt
-homl_learn.egg-info/dependency_links.txt
-homl_learn.egg-info/requires.txt
-homl_learn.egg-info/top_level.txt
