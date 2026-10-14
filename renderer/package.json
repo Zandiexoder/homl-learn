@@ -1,0 +1,25 @@
+{
+  "name": "homl-learn-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Renders Video Overviews with Remotion. Runs with no network access.",
+  "scripts": {
+    "start": "node server.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node test/render-sample.mjs"
+  },
+  "dependencies": {
+    "@fontsource/nunito": "5.2.6",
+    "@remotion/bundler": "4.0.522",
+    "@remotion/renderer": "4.0.522",
+    "express": "5.1.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "remotion": "4.0.522",
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12"
+  }
+}

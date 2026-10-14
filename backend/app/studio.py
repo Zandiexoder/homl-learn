@@ -1,0 +1,138 @@
+"""Studio outputs: reports, study aids and structured views generated from the sources."""
+
+from __future__ import annotations
+
+from . import db, jsonutil, llm, retrieval, settings_store
+
+COMMON = (
+    "Work only from the sources below. Keep their terminology and definitions. "
+    "Where you add connective explanation that is not in the sources, keep it brief. "
+    "Never invent figures, dates or quotes."
+)
+
+MARKDOWN_KINDS = {
+    "study_guide": (
+        "Study guide",
+        "Write a study guide in Markdown with these sections: '## Key concepts' (bulleted, one line each), "
+        "'## Short-answer quiz' ({count} questions), '## Answer key', '## Essay questions' (4 questions, "
+        "no answers), and '## Glossary' (key terms with one-sentence definitions).",
+    ),
+    "briefing": (
+        "Briefing doc",
+        "Write a briefing document in Markdown for a busy reader: a one-paragraph executive summary, then "
+        "'## Main themes' with the most important ideas and supporting detail, then '## Notable quotes' "
+        "(short, exact quotes with the source title), then '## Open questions'.",
+    ),
+    "faq": (
+        "FAQ",
+        "Write an FAQ in Markdown: {count} questions a newcomer would ask, each as a '### ' heading followed "
+        "by a clear answer of 2-4 sentences.",
+    ),
+    "report": (
+        "Report",
+        "Write a well-structured Markdown report with headings, covering the sources in depth.",
+    ),
+}
+
+JSON_KINDS = {
+    "timeline": (
+        "Timeline",
+        'Reply with JSON only: {{"events": [{{"date": "as precise as the sources allow", "title": "...", '
+        '"detail": "1-2 sentences", "source": "source title"}}], "cast": [{{"name": "...", '
+        '"description": "who they are and their role"}}]}}. Order events chronologically. '
+        "If the sources have no dated events, return an empty events list.",
+    ),
+    "mindmap": (
+        "Mind map",
+        'Reply with JSON only: a tree {{"label": "central topic", "children": [{{"label": "...", '
+        '"children": [...]}}]}}. 4-7 main branches, at most 4 levels deep, labels of at most 6 words.',
+    ),
+    "flashcards": (
+        "Flashcards",
+        'Reply with JSON only: {{"cards": [{{"front": "a question or term", "back": "a concise answer", '
+        '"source": "source title"}}]}}. Make {count} cards at {difficulty} difficulty.',
+    ),
+    "quiz": (
+        "Quiz",
+        'Reply with JSON only: {{"questions": [{{"question": "...", "options": ["four options"], '
+        '"answer": 0, "explanation": "why, citing the source"}}]}} where answer is the index of the correct '
+        "option. Make {count} questions at {difficulty} difficulty with plausible wrong options.",
+    ),
+}
+
+KINDS = {**MARKDOWN_KINDS, **JSON_KINDS}
+DEFAULT_COUNT = {"study_guide": 10, "faq": 10, "flashcards": 20, "quiz": 10}
+
+
+def default_title(kind: str) -> str:
+    return KINDS[kind][0]
+
+
+def build_prompt(kind: str, options: dict, sources: list[dict]) -> str:
+    instructions = KINDS[kind][1].format(
+        count=int(options.get("count") or DEFAULT_COUNT.get(kind, 10)),
+        difficulty=options.get("difficulty") or "medium",
+    )
+    extra = []
+    if options.get("focus"):
+        extra.append(f"Focus on: {options['focus']}")
+    if options.get("prompt"):
+        extra.append(f"The reader's instructions: {options['prompt']}")
+    if options.get("language"):
+        extra.append(f"Write in {options['language']}.")
+    return "\n".join([instructions, COMMON, *extra, "", retrieval.format_sources(sources)])
+
+
+def validate(kind: str, data: object) -> dict:
+    if kind == "mindmap":
+        if not isinstance(data, dict) or "label" not in data:
+            raise ValueError("Mind map is missing its central label.")
+        return data
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object.")
+    if kind == "flashcards":
+        cards = [c for c in data.get("cards", []) if isinstance(c, dict) and c.get("front") and c.get("back")]
+        if not cards:
+            raise ValueError("No flashcards were produced.")
+        return {"cards": cards}
+    if kind == "quiz":
+        questions = []
+        for q in data.get("questions", []):
+            opts = q.get("options") if isinstance(q, dict) else None
+            if not opts or not isinstance(q.get("answer"), int) or not 0 <= q["answer"] < len(opts):
+                continue
+            questions.append(q)
+        if not questions:
+            raise ValueError("No valid quiz questions were produced.")
+        return {"questions": questions}
+    if kind == "timeline":
+        return {"events": data.get("events", []), "cast": data.get("cast", [])}
+    return data
+
+
+async def generate(artifact_id: str) -> None:
+    art = db.fetch_one("SELECT * FROM artifacts WHERE id=?", (artifact_id,))
+    if not art:
+        return
+    db.update("artifacts", artifact_id, {"status": "running", "updated_at": db.now()})
+    options = art["options"]
+    sources = retrieval.gather_sources(art["notebook_id"], options.get("source_ids") or None)
+    if not sources:
+        raise ValueError("Select at least one ready source first.")
+    conn, model = settings_store.role("studio")
+    prompt = build_prompt(art["kind"], options, sources)
+    is_json = art["kind"] in JSON_KINDS
+    messages = [{"role": "user", "content": prompt}]
+    raw = await llm.complete(conn, model, "", messages, json_mode=is_json, effort="medium")
+    if is_json:
+        try:
+            data = validate(art["kind"], jsonutil.extract_json(raw))
+        except ValueError as exc:
+            # One repair attempt with the error shown to the model.
+            messages += [{"role": "assistant", "content": raw},
+                         {"role": "user", "content": f"That was not usable ({exc}). Reply with the corrected JSON only."}]
+            raw = await llm.complete(conn, model, "", messages, json_mode=True, effort="medium")
+            data = validate(art["kind"], jsonutil.extract_json(raw))
+    else:
+        data = {"markdown": raw}
+    db.update("artifacts", artifact_id, {"status": "done", "data": data, "updated_at": db.now()})
