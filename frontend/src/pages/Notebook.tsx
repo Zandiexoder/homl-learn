@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ChatPanel } from "../components/ChatPanel";
 import { Header } from "../components/Header";
-import { SourcesPanel } from "../components/SourcesPanel";
+import { SourcesPanel, type SourceFocus } from "../components/SourcesPanel";
 import { StudioPanel } from "../components/StudioPanel";
 import { api, type Artifact, type Note, type Notebook, type SettingsResponse, type Source } from "../lib/api";
 import { usePolled } from "../lib/hooks";
@@ -14,7 +14,7 @@ export function NotebookPage() {
   const { id } = useParams<{ id: string }>();
   const [title, setTitle] = useState("");
   const [model, setModel] = useState<string>("");
-  const [focusSource, setFocusSource] = useState<string | null>(null);
+  const [focusSource, setFocusSource] = useState<SourceFocus | null>(null);
   const [question, setQuestion] = useState<string | null>(null);
   const sources = usePolled<Source[]>(`/notebooks/${id}/sources`, busySources);
   const artifacts = usePolled<Artifact[]>(`/notebooks/${id}/artifacts`, busyArtifacts);
@@ -53,10 +53,13 @@ export function NotebookPage() {
     <div className="app">
       <Header
         right={
+          <>
+          <a className="btn sm" href={`/api/notebooks/${id}/export`} download title="Download sources, notes, chat and outputs as a zip">Export</a>
           <Link className="chip" to="/settings" title="Change the model in Settings">
             <span className="dot" />
             <span>{model}</span>
           </Link>
+          </>
         }
       >
         <span className="crumb" aria-hidden="true">/</span>
@@ -67,12 +70,12 @@ export function NotebookPage() {
         </label>
       </Header>
       <main className="workspace">
-        <SourcesPanel notebookId={notebook.id} sources={sources.data ?? []} reload={() => { sources.reload(); nb.reload(); }} focusId={focusSource} />
+        <SourcesPanel notebookId={notebook.id} sources={sources.data ?? []} reload={() => { sources.reload(); nb.reload(); }} focus={focusSource} onResearch={artifacts.reload} />
         <ChatPanel key={notebook.id} notebook={notebook} readyCount={readyCount} onNoteSaved={notes.reload}
           onNotebookChange={nb.setData} pendingQuestion={question} onQuestionTaken={() => setQuestion(null)}
-          onOpenSource={(sid) => { setFocusSource(null); requestAnimationFrame(() => setFocusSource(sid)); }} />
+          onOpenSource={(id, passage) => setFocusSource({ id, passage })} />
         <StudioPanel notebookId={notebook.id} artifacts={artifacts.data ?? []} notes={notes.data ?? []}
-          reloadArtifacts={artifacts.reload} reloadNotes={notes.reload} onAsk={setQuestion} />
+          reloadArtifacts={artifacts.reload} reloadNotes={notes.reload} onAsk={setQuestion} onSourcesAdded={sources.reload} />
       </main>
     </div>
   );

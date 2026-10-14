@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node test/render-sample.mjs"
+    "test": "node test/render-sample.mjs && node test/render-infographic.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "5.2.6",

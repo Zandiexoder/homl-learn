@@ -69,6 +69,26 @@ def reply_for(system: str, prompt: str) -> str:
         return json.dumps(VIDEO_SPEC)
     if "Fix it and reply with the complete corrected" in prompt:
         return "```tsx\n" + TURBINE + "\n```"
+    if '"layout": "section"' in prompt:
+        return json.dumps({"title": "How Cells Make Energy", "subtitle": "From glucose to ATP", "slides": [
+            {"layout": "section", "title": "The big picture"},
+            {"layout": "bullets", "title": "Three stages", "bullets": ["Glycolysis in the cytoplasm", "Krebs cycle in the matrix", "Electron transport on the inner membrane"], "notes": "Walk through each stage briefly."},
+            {"layout": "two_column", "title": "Aerobic vs anaerobic", "left": {"heading": "Aerobic", "bullets": ["Uses oxygen", "About 30 ATP"]}, "right": {"heading": "Anaerobic", "bullets": ["No oxygen", "2 ATP"]}},
+            {"layout": "quote", "quote": "Protons flow back through ATP synthase, spinning its rotor.", "attribution": "Lecture 7"},
+            {"layout": "bullets", "title": "Summary", "bullets": ["Electrons power pumps", "Gradient spins the turbine"]}]})
+    if '"takeaway"' in prompt:
+        return json.dumps({"title": "How cells make energy", "subtitle": "A proton gradient powers ATP synthase",
+                           "stats": [], "sections": [{"heading": "Electron transport", "text": "Electrons power pumps that move protons out of the matrix."},
+                                                     {"heading": "ATP synthase", "text": "Protons flow back through a rotary enzyme that makes ATP."},
+                                                     {"heading": "The membrane", "text": "The inner membrane must stay sealed to hold the gradient."}],
+                           "steps": ["Electrons pump protons", "Protons spin the turbine", "The turbine makes ATP"],
+                           "takeaway": "Cells store energy as a proton gradient, then cash it in as ATP.", "source": "Lecture 7"})
+    if "Plan " in prompt and '"queries"' in prompt:
+        return json.dumps({"queries": ["ATP synthase rotary mechanism", "chemiosmotic theory evidence"]})
+    if "Research question:" in prompt:
+        return json.dumps({"report": "## Findings\n\nATP synthase is a rotary motor driven by proton flow [1]. "
+                                     "Mitchell's chemiosmotic theory is well supported [2].",
+                           "recommended": [{"n": 1, "why": "Clear explainer of the mechanism"}, {"n": 2, "why": "History and evidence"}]})
     if "Reply with the single word: ready" in prompt:
         return "ready"
     if "Summarise this source" in prompt:
@@ -99,6 +119,24 @@ def reply_for(system: str, prompt: str) -> str:
     if '"events"' in prompt:
         return json.dumps({"events": [{"date": "1961", "title": "Chemiosmotic theory", "detail": "Mitchell proposes the proton gradient.", "source": "Lecture 7"}], "cast": [{"name": "Peter Mitchell", "description": "Proposed chemiosmosis"}]})
     return "## Key ideas\n\n- Electrons drive proton pumps.\n- The gradient spins ATP synthase.\n"
+
+
+PAGE = ("<html><head><title>{title}</title></head><body><article><h1>{title}</h1><p>"
+        + "ATP synthase is a rotary enzyme. Protons flowing through it turn its rotor, which drives the synthesis of ATP. " * 8
+        + "</p></article></body></html>")
+
+
+@app.get("/search")
+def searxng(q: str, format: str = "json") -> dict:
+    """Fake SearXNG: two results pointing at the pages below."""
+    return {"results": [{"title": "How ATP synthase works", "url": "http://localhost:9100/pages/atp", "content": "A rotary motor."},
+                        {"title": "Chemiosmosis history", "url": "http://localhost:9100/pages/history", "content": "Mitchell, 1961."}]}
+
+
+@app.get("/pages/{name}")
+def page(name: str) -> Response:
+    title = {"atp": "How ATP synthase works", "history": "Chemiosmosis history"}.get(name, name)
+    return Response(PAGE.format(title=title), media_type="text/html")
 
 
 @app.get("/v1/models")

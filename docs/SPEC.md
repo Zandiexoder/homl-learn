@@ -16,7 +16,9 @@ A self-hosted, single-user clone of NotebookLM. All data stays on the server; mo
 
 - **Sources**: PDF, web URL, YouTube, pasted text/Markdown, audio (transcribed). Web source discovery. Per-source selection for chat and generation.
 - **Cited chat**: answers grounded in the selected sources with inline citation chips that open the quoted passage. Save answers to notes.
-- **Studio outputs**: study guide, briefing doc, FAQ, timeline, mind map, flashcards, quiz, reports, notes.
+- **Studio outputs**: study guide, briefing doc, FAQ, timeline, mind map, flashcards, quiz, reports, slide decks (PowerPoint export), infographics (PNG), notes.
+- **Research**: fast or deep web research with a cited report and recommended sources (SearXNG).
+- **Sharing and export**: read-only share links per output; whole-notebook zip export.
 - **Audio Overview**: two-host conversation, with a voice picked for each host. Formats: deep dive, brief, critique, debate. **Interactive mode** lets you interrupt and ask by voice (speech-to-text, then the LLM, then TTS).
 - **Video Overview**: the LLM follows the bundled `video-creation/SKILL.md` (flat-vector explainer style) to write the script and one Remotion scene per beat. The pipeline is brief, script, narration, scene code, render, verify. Individual lines can be edited, re-voiced or redrawn.
 

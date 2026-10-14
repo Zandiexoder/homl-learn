@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS notes (
   created_at REAL NOT NULL,
   updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS shares (
+  token TEXT PRIMARY KEY,
+  artifact_id TEXT NOT NULL UNIQUE REFERENCES artifacts(id) ON DELETE CASCADE,
+  created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS artifacts (
   id TEXT PRIMARY KEY,
   notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,

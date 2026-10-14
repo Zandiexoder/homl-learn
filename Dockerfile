@@ -8,14 +8,15 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 RUN pip install --no-cache-dir .
 COPY --from=frontend /src/dist /app/static
-ENV DATA_DIR=/data STATIC_DIR=/app/static RENDERER_URL=http://renderer:3100
+# OCR languages for scanned PDFs and images: install more with tesseract-ocr-<lang> and list them, e.g. eng+spa.
+ENV DATA_DIR=/data STATIC_DIR=/app/static RENDERER_URL=http://renderer:3100 OCR_LANGS=eng
 VOLUME /data
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

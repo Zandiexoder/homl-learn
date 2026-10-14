@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, jobs
-from .api import auth, notebooks, settings
+from .api import auth, notebooks, public, settings
 from .config import get_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -29,6 +29,7 @@ app = FastAPI(title="Homl Learn", lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(notebooks.router)
 app.include_router(settings.router)
+app.include_router(public.router)
 
 
 @app.exception_handler(LookupError)

@@ -6,11 +6,14 @@ A self-hosted research notebook in the spirit of NotebookLM. Add sources, chat w
 
 | Area | Features |
 |---|---|
-| **Sources** | PDF, Word, Markdown/text, web pages, YouTube (transcripts), audio and video files (transcribed with speakers). Web discovery through SearXNG. Pick which sources each answer uses. |
-| **Chat** | Answers grounded in your sources, with numbered citations that open the quoted passage. Notebook summary and suggested questions. Ask by voice. Save answers as notes. Configure each notebook's chat: default, learning guide, analyst or your own instructions, and shorter or longer answers. |
-| **Studio** | Study guide, briefing doc, FAQ, custom reports, timeline with cast of characters, mind map (ask the chat about any topic in it), flashcards and quizzes. Outputs use a default language you set in Settings, or one you pick per output. |
+| **Sources** | PDF (scanned pages are OCR'd), Word, PowerPoint (with speaker notes), EPUB, images (OCR plus a description from the chat model if it can see images), Markdown/text, web pages, YouTube (transcripts), shared Google Docs/Slides/Sheets/Drive links, and audio or video files (transcribed with speakers). Pick which sources each answer uses. |
+| **Research** | Find sources on the web, or run **fast** or **deep research**: the model plans searches, reads the pages, writes a cited report and recommends sources to add in one click. Needs SearXNG. |
+| **Chat** | Answers grounded in your sources, with numbered citations; open one to jump to the passage, highlighted, in the full source. Notebook summary and suggested questions. Ask by voice. Save answers as notes. Configure each notebook's chat: default, learning guide, analyst or your own instructions, and shorter or longer answers. |
+| **Studio** | Study guide, briefing doc, FAQ, custom reports, timeline with cast of characters, mind map (ask the chat about any topic in it), flashcards, quizzes, **slide decks** (download as PowerPoint) and **infographics** (PNG). Outputs use a default language you set in Settings, or one you pick per output. |
 | **Audio Overview** | Two hosts discuss your sources: deep dive, brief, critique or debate, three lengths, any language, a voice of your choice for each host. **Join the conversation**: interrupt, ask a question out loud, hear the hosts answer, then carry on. |
 | **Video Overview** | The LLM follows the bundled [video-creation skill](backend/app/video/SKILL.md) to write a script and scene plan. A Remotion scene kit (14 animated scene types) draws it, and the LLM may write its own animated scenes, which are type-checked and sandboxed. Narration is voiced and the video gets subtitles, chapters and loudness normalisation, then is checked automatically (10 checks). Edit any line and re-voice just that line, or redraw one scene. |
+
+| **Sharing and export** | Share any finished output with a read-only link (no sign-in needed; turn it off any time). Export a whole notebook as a zip: sources (originals and text), notes, chat, and every output. |
 
 ## Providers
 
@@ -66,8 +69,9 @@ Environment variables (set them in a `.env` file next to `docker-compose.yml`):
 | `COOKIE_SECURE` | `false` | Set `true` when serving over HTTPS. |
 | `RENDER_CONCURRENCY` | Remotion default | Browser tabs used to render video frames. |
 | `REMOTION_GL` | empty | `angle` or `egl` to try GPU rendering in the renderer container. |
+| `OCR_LANGS` | `eng` | Tesseract languages for scanned PDFs and images, e.g. `eng+spa` (add the matching `tesseract-ocr-*` package to the Dockerfile). |
 
-All data (SQLite database, sources, audio, video) lives in the `homl-data` volume. To back up, copy that volume. To reach the app from other devices, put it behind a reverse proxy with HTTPS (Caddy, Traefik, nginx) and set `COOKIE_SECURE=true`.
+Share links are the only pages reachable without the password: each shows one output and its media files, nothing else, and stops working when you turn it off. All data (SQLite database, sources, audio, video) lives in the `homl-data` volume. To back up, copy that volume. To reach the app from other devices, put it behind a reverse proxy with HTTPS (Caddy, Traefik, nginx) and set `COOKIE_SECURE=true`.
 
 ### Video rendering and safety
 

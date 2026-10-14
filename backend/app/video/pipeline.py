@@ -199,9 +199,20 @@ async def fix_custom(scene: dict, error: str) -> str | None:
 
 
 async def render(folder: Path, on_progress) -> dict:
+    """Render spec.json in the folder to silent.mp4 plus scene stills."""
+    return await run_renderer_job(folder, "video", on_progress)
+
+
+async def render_still(folder: Path) -> dict:
+    """Render still.json in the folder (an infographic) to a PNG; returns the job result."""
+    job = await run_renderer_job(folder, "still", lambda *_: None)
+    return job["result"]
+
+
+async def run_renderer_job(folder: Path, mode: str, on_progress) -> dict:
     async with httpx.AsyncClient(timeout=60) as client:
         try:
-            resp = await client.post(f"{renderer_url()}/jobs", json={"jobDir": str(folder)})
+            resp = await client.post(f"{renderer_url()}/jobs", json={"jobDir": str(folder), "mode": mode})
         except httpx.HTTPError as exc:
             raise VideoError(f"The video renderer is unreachable at {renderer_url()}: {exc}") from exc
     if resp.status_code >= 400:

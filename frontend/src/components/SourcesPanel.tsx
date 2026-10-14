@@ -1,25 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Source } from "../lib/api";
+import { findPassage } from "../lib/highlight";
 import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
 
-const BADGE: Record<string, string> = { pdf: "PDF", web: "WEB", youtube: "YT", audio: "AUD", text: "TXT", "file-text": "TXT", docx: "DOC" };
-const ACCEPT = ".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm,.srt,.vtt,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.mp4,.mkv,.mov";
+const BADGE: Record<string, string> = {
+  pdf: "PDF", web: "WEB", youtube: "YT", audio: "AUD", text: "TXT", "file-text": "TXT", docx: "DOC", pptx: "PPT", epub: "BOOK", image: "IMG",
+};
+const ACCEPT = ".pdf,.docx,.pptx,.epub,.txt,.md,.markdown,.csv,.json,.html,.htm,.srt,.vtt,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.mp4,.mkv,.mov";
 
-export function SourcesPanel({ notebookId, sources, reload, focusId }: {
+export type SourceFocus = { id: string; passage?: string };
+
+export function SourcesPanel({ notebookId, sources, reload, focus, onResearch }: {
   notebookId: string;
   sources: Source[];
   reload: () => void;
-  focusId?: string | null;
+  focus?: SourceFocus | null;
+  onResearch: () => void;
 }) {
   const [adding, setAdding] = useState(sources.length === 0);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [passage, setPassage] = useState<string | undefined>();
   const [discoverQ, setDiscoverQ] = useState("");
   const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {
-    if (focusId) setViewing(focusId);
-  }, [focusId]);
+    if (focus) {
+      setViewing(focus.id);
+      setPassage(focus.passage);
+    }
+  }, [focus]);
 
   const allSelected = sources.length > 0 && sources.every((s) => s.selected);
 
@@ -60,7 +70,7 @@ export function SourcesPanel({ notebookId, sources, reload, focusId }: {
         {sources.map((s) => (
           <li key={s.id} className={`source-item${viewing === s.id ? " active" : ""}`}>
             <span className={`badge ${s.kind}`} aria-hidden="true">{BADGE[s.kind] ?? "SRC"}</span>
-            <button className="source-title" onClick={() => setViewing(s.id)} title={s.title}>
+            <button className="source-title" onClick={() => { setViewing(s.id); setPassage(undefined); }} title={s.title}>
               {s.title}
               {s.status !== "ready" && (
                 <span className="row small" style={{ color: s.status === "failed" ? "var(--danger)" : "var(--muted)", whiteSpace: "normal" }}>
@@ -76,9 +86,9 @@ export function SourcesPanel({ notebookId, sources, reload, focusId }: {
       {sources.length === 0 && <p className="muted small" style={{ padding: "0 16px" }}>Add PDFs, web pages, YouTube links, audio or notes to get started.</p>}
 
       {adding && <AddSourceDialog notebookId={notebookId} onClose={() => setAdding(false)} onAdded={reload} />}
-      {viewing && <SourceViewer id={viewing} onClose={() => setViewing(null)} onChanged={reload} />}
+      {viewing && <SourceViewer id={viewing} passage={passage} onClose={() => setViewing(null)} onChanged={reload} />}
       {discovering && (
-        <DiscoverDialog notebookId={notebookId} query={discoverQ} onClose={() => setDiscovering(false)} onAdded={reload} />
+        <DiscoverDialog notebookId={notebookId} query={discoverQ} onResearch={onResearch} onClose={() => setDiscovering(false)} onAdded={reload} />
       )}
     </section>
   );
@@ -129,7 +139,7 @@ function AddSourceDialog({ notebookId, onClose, onAdded }: { notebookId: string;
           onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files); }}>
           <p style={{ margin: "0 0 12px", fontWeight: 600 }}>Drop files here</p>
-          <p className="muted small" style={{ margin: "0 0 16px" }}>PDF, Word, Markdown, text, audio and video (transcribed). Up to 500 MB each.</p>
+          <p className="muted small" style={{ margin: "0 0 16px" }}>PDF (scans are OCR'd), Word, PowerPoint, EPUB, images, Markdown, text, and audio or video (transcribed). Up to 500 MB each.</p>
           <input ref={fileRef} type="file" multiple accept={ACCEPT} hidden onChange={(e) => upload(e.target.files)} />
           <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>Choose files</button>
         </div>
@@ -139,7 +149,7 @@ function AddSourceDialog({ notebookId, onClose, onAdded }: { notebookId: string;
           <label className="field">
             Link
             <input className="input" type="url" required placeholder="https://… or a YouTube link" value={url} onChange={(e) => setUrl(e.target.value)} />
-            <span className="hint">Web pages are read as articles. YouTube links use the video's transcript.</span>
+            <span className="hint">Web pages are read as articles, YouTube links use the transcript, and Google Docs, Slides, Sheets and Drive files work when shared with "Anyone with the link".</span>
           </label>
           <button className="btn primary" disabled={busy || !url}>Add link</button>
         </form>
@@ -163,11 +173,16 @@ function AddSourceDialog({ notebookId, onClose, onAdded }: { notebookId: string;
   );
 }
 
-function SourceViewer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+function SourceViewer({ id, passage, onClose, onChanged }: { id: string; passage?: string; onClose: () => void; onChanged: () => void }) {
   const [source, setSource] = useState<Source | null>(null);
+  const markRef = useRef<HTMLElement>(null);
   useEffect(() => {
     api<Source>(`/sources/${id}`).then(setSource);
   }, [id]);
+  const range = source?.text && passage ? findPassage(source.text, passage) : null;
+  useEffect(() => {
+    markRef.current?.scrollIntoView({ block: "center" });
+  }, [source, range?.[0]]);
   if (!source) return null;
 
   async function remove() {
@@ -193,7 +208,17 @@ function SourceViewer({ id, onClose, onChanged }: { id: string; onClose: () => v
           <p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{source.summary}</p>
         </div>
       )}
-      {source.text && <pre className="quote" style={{ maxHeight: "50vh", overflow: "auto", fontFamily: "var(--body)" }}>{source.text}</pre>}
+      {source.text && (
+        <pre className="quote" style={{ maxHeight: "50vh", overflow: "auto", fontFamily: "var(--body)" }}>
+          {range ? (
+            <>
+              {source.text.slice(0, range[0])}
+              <mark ref={markRef} className="cited">{source.text.slice(range[0], range[1])}</mark>
+              {source.text.slice(range[1])}
+            </>
+          ) : source.text}
+        </pre>
+      )}
       <div className="row">
         {source.status === "failed" && <button className="btn" onClick={retry}><Icon name="retry" size={16} /> Try again</button>}
         <div className="spacer" />
@@ -205,7 +230,9 @@ function SourceViewer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
 type Hit = { title: string; url: string; snippet: string };
 
-function DiscoverDialog({ notebookId, query, onClose, onAdded }: { notebookId: string; query: string; onClose: () => void; onAdded: () => void }) {
+function DiscoverDialog({ notebookId, query, onClose, onAdded, onResearch }: {
+  notebookId: string; query: string; onClose: () => void; onAdded: () => void; onResearch: () => void;
+}) {
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -220,8 +247,25 @@ function DiscoverDialog({ notebookId, query, onClose, onAdded }: { notebookId: s
     onClose();
   }
 
+  async function research(mode: "fast" | "deep") {
+    try {
+      await api(`/notebooks/${notebookId}/artifacts`, { body: { kind: "research", options: { query, mode } } });
+      onResearch();
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <Dialog title={`Sources for "${query}"`} onClose={onClose} wide>
+      <div className="card row wrap" style={{ justifyContent: "space-between" }}>
+        <span className="small">Or let the model research it: it plans searches, reads the results and writes a cited report you can add sources from.</span>
+        <span className="row">
+          <button className="btn sm" onClick={() => research("fast")}>Fast research</button>
+          <button className="btn sm accent" onClick={() => research("deep")}>Deep research</button>
+        </span>
+      </div>
       {error && <div className="error-box">{error}</div>}
       {!hits && !error && <div className="row muted"><span className="spinner" /> Searching…</div>}
       {hits?.length === 0 && <p className="muted">No results.</p>}

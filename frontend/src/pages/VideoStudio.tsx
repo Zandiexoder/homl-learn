@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ShareButton } from "../components/ArtifactViewer";
 import { Header } from "../components/Header";
 import { Icon } from "../components/Icon";
 import { api, fileUrl, type Artifact } from "../lib/api";
@@ -50,7 +51,12 @@ export function VideoStudio() {
 
   return (
     <div className="app">
-      <Header right={d.video && <a className="btn" href={fileUrl(d.video)} download><Icon name="download" size={16} /> Download MP4</a>}>
+      <Header right={d.video && art.status === "done" && (
+        <>
+          <ShareButton artifactId={art.id} />
+          <a className="btn" href={fileUrl(d.video)} download><Icon name="download" size={16} /> Download MP4</a>
+        </>
+      )}>
         <Link to={`/notebooks/${id}`} className="btn ghost"><Icon name="back" size={16} /> Notebook</Link>
         <span className="crumb" aria-hidden="true">/</span>
         <h1>Video Overview: {art.title}</h1>

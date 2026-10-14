@@ -184,6 +184,21 @@ async def complete(conn: dict, model: str, system: str, messages: list[Message],
     return "".join(parts).strip()
 
 
+async def describe_image(conn: dict, model: str, png: bytes, mime: str = "image/png") -> str:
+    """Describe an image for use as a source. Raises LLMError if the model can't take images."""
+    import base64
+
+    b64 = base64.b64encode(png).decode()
+    prompt = ("Describe this image so it can be used as a study source: what it shows, every label, number "
+              "and caption you can read, and what a chart or diagram means. Do not guess beyond what is visible.")
+    if conn.get("kind") == "anthropic":
+        content: list = [{"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
+                         {"type": "text", "text": prompt}]
+    else:
+        content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]
+    return await complete(conn, model, "", [{"role": "user", "content": content}], effort="low")
+
+
 async def list_models(conn: dict) -> list[str]:
     if conn.get("kind") == "anthropic":
         client = _anthropic_client(conn)

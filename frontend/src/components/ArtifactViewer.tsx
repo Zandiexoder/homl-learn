@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type Artifact } from "../lib/api";
+import { api, fileUrl, type Artifact } from "../lib/api";
 import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
@@ -9,8 +9,67 @@ type Question = { question: string; options: string[]; answer: number; explanati
 type MindNode = { label: string; children?: MindNode[] };
 type Event = { date: string; title: string; detail?: string; source?: string };
 
-export function ArtifactViewer({ artifact, onClose, onNoteSaved, onAsk }: {
-  artifact: Artifact; onClose: () => void; onNoteSaved: () => void; onAsk?: (question: string) => void;
+/** Read-only content of a Studio output. Used by the owner's viewer and by public share pages. */
+export function ArtifactContent({ kind, data: d, resolve, onAsk }: {
+  kind: string;
+  data: Record<string, unknown>;
+  /** Turns a stored file path into a URL. */
+  resolve: (path: string) => string;
+  onAsk?: (question: string) => void;
+}) {
+  if (kind === "slides") return <SlideDeck deck={d as unknown as Deck} />;
+  if (kind === "infographic") {
+    return typeof d.image === "string"
+      ? <img src={resolve(d.image)} alt={String(d.title ?? "Infographic")} style={{ width: "100%", maxWidth: 540, alignSelf: "center", borderRadius: 12, border: "1px solid var(--line)" }} />
+      : <p className="muted">The image wasn't rendered.</p>;
+  }
+  if (kind === "audio" && typeof d.audio === "string") {
+    const turns = (d.turns as { speaker: string; text: string }[]) ?? [];
+    return (
+      <div className="stack">
+        <audio controls src={resolve(d.audio)} style={{ width: "100%" }} />
+        <ol className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 8 }}>
+          {turns.map((t, i) => <li key={i}><span className="mono small muted">Host {t.speaker} </span>{t.text}</li>)}
+        </ol>
+      </div>
+    );
+  }
+  if (kind === "video" && typeof d.video === "string") {
+    const stills = (d.stills as string[]) ?? [];
+    return (
+      <video className="player" controls src={resolve(d.video)} poster={stills[0] ? resolve(stills[0]) : undefined}>
+        {typeof d.subtitles === "string" && <track kind="subtitles" label="Narration" srcLang="en" src={resolve(d.subtitles)} default />}
+      </video>
+    );
+  }
+  if (kind === "research" && typeof d.markdown === "string" && Array.isArray(d.references)) {
+    // Turn [n] markers into links to the numbered web references.
+    const refs = d.references as { n: number; url: string }[];
+    const linked = d.markdown.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (whole, nums: string) => {
+      const parts = nums.split(",").map((n) => refs.find((r) => r.n === Number(n.trim())));
+      return parts.every(Boolean) ? parts.map((r) => `[[${r!.n}]](${r!.url})`).join("") : whole;
+    });
+    return <Markdown text={linked} />;
+  }
+  if (typeof d.markdown === "string") return <Markdown text={d.markdown} />;
+  if (kind === "flashcards") return <Flashcards cards={d.cards as Card[]} />;
+  if (kind === "quiz") return <Quiz questions={d.questions as Question[]} />;
+  if (kind === "mindmap") {
+    return (
+      <>
+        <p className="small muted" style={{ margin: 0 }}>Open a topic with + / −.{onAsk ? " Choose “Ask” to discuss it in the chat." : ""}</p>
+        <ul className="mm-children" style={{ borderLeft: 0, margin: 0, paddingLeft: 0 }}>
+          <MindMapNode node={d as unknown as MindNode} depth={0} path={[]} onAsk={onAsk} />
+        </ul>
+      </>
+    );
+  }
+  if (kind === "timeline") return <TimelineView events={d.events as Event[]} cast={d.cast as { name: string; description: string }[]} />;
+  return <pre className="quote">{JSON.stringify(d, null, 2)}</pre>;
+}
+
+export function ArtifactViewer({ artifact, onClose, onNoteSaved, onAsk, onSourcesAdded }: {
+  artifact: Artifact; onClose: () => void; onNoteSaved: () => void; onAsk?: (question: string) => void; onSourcesAdded?: () => void;
 }) {
   const d = artifact.data;
   const [saved, setSaved] = useState(false);
@@ -21,34 +80,151 @@ export function ArtifactViewer({ artifact, onClose, onNoteSaved, onAsk }: {
     onNoteSaved();
   }
 
-  let body: React.ReactNode;
-  if (typeof d.markdown === "string") {
-    body = (
-      <>
-        <Markdown text={d.markdown} />
-        <div className="row">
-          <button className="btn" onClick={toNote} disabled={saved}><Icon name="note" size={16} /> {saved ? "Saved to notes" : "Save to notes"}</button>
-          <button className="btn" onClick={() => navigator.clipboard.writeText(d.markdown as string)}><Icon name="copy" size={16} /> Copy</button>
-        </div>
-      </>
-    );
-  } else if (artifact.kind === "flashcards") body = <Flashcards cards={d.cards as Card[]} />;
-  else if (artifact.kind === "quiz") body = <Quiz questions={d.questions as Question[]} />;
-  else if (artifact.kind === "mindmap") body = (
-    <>
-      <p className="small muted" style={{ margin: 0 }}>Open a topic with + / −. Choose “Ask” to discuss it in the chat.</p>
-      <ul className="mm-children" style={{ borderLeft: 0, margin: 0, paddingLeft: 0 }}>
-        <MindMapNode node={d as unknown as MindNode} depth={0} path={[]} onAsk={onAsk && ((q) => { onAsk(q); onClose(); })} />
-      </ul>
-    </>
-  );
-  else if (artifact.kind === "timeline") body = <TimelineView events={d.events as Event[]} cast={d.cast as { name: string; description: string }[]} />;
-  else body = <pre className="quote">{JSON.stringify(d, null, 2)}</pre>;
-
   return (
     <Dialog title={artifact.title} onClose={onClose} wide>
-      {body}
+      {artifact.kind === "research" && Array.isArray(d.recommended) && (
+        <ResearchSources notebookId={artifact.notebook_id} recommended={d.recommended as Recommended[]} onAdded={onSourcesAdded} />
+      )}
+      <ArtifactContent kind={artifact.kind} data={d} resolve={fileUrl} onAsk={onAsk && ((q) => { onAsk(q); onClose(); })} />
+      <div className="row wrap">
+        {typeof d.markdown === "string" && (
+          <>
+            <button className="btn" onClick={toNote} disabled={saved}><Icon name="note" size={16} /> {saved ? "Saved to notes" : "Save to notes"}</button>
+            <button className="btn" onClick={() => navigator.clipboard.writeText(d.markdown as string)}><Icon name="copy" size={16} /> Copy</button>
+          </>
+        )}
+        {artifact.kind === "slides" && (
+          <a className="btn" href={`/api/artifacts/${artifact.id}/export/pptx`} download><Icon name="download" size={16} /> Download PowerPoint</a>
+        )}
+        {artifact.kind === "infographic" && typeof d.image === "string" && (
+          <a className="btn" href={fileUrl(d.image)} download={`${artifact.title}.png`}><Icon name="download" size={16} /> Download PNG</a>
+        )}
+        <div className="spacer" />
+        <ShareButton artifactId={artifact.id} />
+      </div>
     </Dialog>
+  );
+}
+
+type Recommended = { n: number; title: string; url: string; why: string };
+
+function ResearchSources({ notebookId, recommended, onAdded }: { notebookId: string; recommended: Recommended[]; onAdded?: () => void }) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(recommended.map((r) => r.url)));
+  const [added, setAdded] = useState(false);
+  if (!recommended.length) return null;
+  async function add() {
+    for (const url of picked) await api(`/notebooks/${notebookId}/sources/link`, { body: { url } });
+    setAdded(true);
+    onAdded?.();
+  }
+  return (
+    <div className="card stack" style={{ gap: 8 }}>
+      <strong>Recommended sources</strong>
+      {recommended.map((r) => (
+        <label key={r.url} className="row" style={{ alignItems: "flex-start", gap: 10 }}>
+          <input type="checkbox" style={{ width: 18, height: 18, marginTop: 2, accentColor: "var(--accent)" }} checked={picked.has(r.url)} disabled={added}
+            onChange={() => setPicked((p) => { const n = new Set(p); n.has(r.url) ? n.delete(r.url) : n.add(r.url); return n; })} />
+          <span className="grow">
+            <a href={r.url} target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>[{r.n}] {r.title}</a>
+            {r.why && <span className="small muted" style={{ display: "block" }}>{r.why}</span>}
+          </span>
+        </label>
+      ))}
+      <button className="btn accent" style={{ alignSelf: "flex-start" }} onClick={add} disabled={added || !picked.size}>
+        {added ? "Added to sources" : `Add ${picked.size} to sources`}
+      </button>
+    </div>
+  );
+}
+
+export function ShareButton({ artifactId }: { artifactId: string }) {
+  const [token, setToken] = useState<string | null | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  const url = token ? `${window.location.origin}/share/${token}` : "";
+  async function load() {
+    setToken((await api<{ token: string | null }>(`/artifacts/${artifactId}/share`)).token);
+  }
+  async function create() {
+    const t = (await api<{ token: string }>(`/artifacts/${artifactId}/share`, { body: {} })).token;
+    setToken(t);
+    await navigator.clipboard?.writeText(`${window.location.origin}/share/${t}`).then(() => setCopied(true), () => {});
+  }
+  async function revoke() {
+    await api(`/artifacts/${artifactId}/share`, { method: "DELETE" });
+    setToken(null);
+    setCopied(false);
+  }
+  if (token === undefined) return <button className="btn" onClick={load}><Icon name="link" size={16} /> Share…</button>;
+  if (!token) return <button className="btn" onClick={create}><Icon name="link" size={16} /> Create share link</button>;
+  return (
+    <span className="row wrap">
+      <input className="input mono" readOnly value={url} aria-label="Share link" style={{ width: 280, minHeight: 36, fontSize: 12 }} onFocus={(e) => e.target.select()} />
+      <button className="btn sm" onClick={() => navigator.clipboard.writeText(url).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</button>
+      <button className="btn sm danger" onClick={revoke}>Turn off link</button>
+    </span>
+  );
+}
+
+type Slide = {
+  layout: "section" | "bullets" | "two_column" | "quote";
+  title?: string; bullets?: string[]; notes?: string; quote?: string; attribution?: string;
+  left?: { heading?: string; bullets?: string[] }; right?: { heading?: string; bullets?: string[] };
+};
+type Deck = { title: string; subtitle?: string; slides: Slide[] };
+
+function SlideDeck({ deck }: { deck: Deck }) {
+  const slides: Slide[] = [{ layout: "section", title: deck.title, bullets: deck.subtitle ? [deck.subtitle] : [] }, ...deck.slides];
+  const [i, setI] = useState(0);
+  const [showNotes, setShowNotes] = useState(false);
+  const s = slides[i];
+  const go = (n: number) => setI(Math.max(0, Math.min(slides.length - 1, n)));
+  const list = (items?: string[]) => <ul style={{ margin: 0, paddingLeft: "1.2em", display: "flex", flexDirection: "column", gap: "0.5em" }}>{items?.map((b, k) => <li key={k}>{b}</li>)}</ul>;
+  return (
+    <div className="stack" onKeyDown={(e) => { if (e.key === "ArrowRight") go(i + 1); if (e.key === "ArrowLeft") go(i - 1); }}>
+      <div className="slide" data-layout={s.layout} role="group" aria-roledescription="slide" aria-label={`Slide ${i + 1} of ${slides.length}`} tabIndex={0}>
+        {s.layout === "section" && (
+          <div className="slide-center">
+            <div className="slide-title">{s.title}</div>
+            {s.bullets?.[0] && <div className="slide-sub">{s.bullets[0]}</div>}
+          </div>
+        )}
+        {s.layout === "quote" && (
+          <div className="slide-center">
+            <div className="slide-quote">“{s.quote}”</div>
+            {s.attribution && <div className="slide-sub">— {s.attribution}</div>}
+          </div>
+        )}
+        {s.layout === "bullets" && (
+          <>
+            <div className="slide-title">{s.title}</div>
+            <div className="slide-bar" />
+            <div className="slide-body">{list(s.bullets)}</div>
+          </>
+        )}
+        {s.layout === "two_column" && (
+          <>
+            <div className="slide-title">{s.title}</div>
+            <div className="slide-bar" />
+            <div className="slide-cols">
+              {[s.left, s.right].map((col, k) => (
+                <div key={k}><div className="slide-colhead">{col?.heading}</div><div className="slide-body">{list(col?.bullets)}</div></div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <button className="btn" onClick={() => go(i - 1)} disabled={i === 0}>Previous</button>
+        <span className="mono small muted">{i + 1} / {slides.length}</span>
+        <button className="btn primary" onClick={() => go(i + 1)} disabled={i === slides.length - 1}>Next</button>
+      </div>
+      {s.notes && (
+        <div>
+          <button className="btn sm" onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes}>{showNotes ? "Hide" : "Show"} speaker notes</button>
+          {showNotes && <p className="card small" style={{ marginTop: 8 }}>{s.notes}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

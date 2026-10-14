@@ -15,6 +15,8 @@ const MAIN: Kind[] = [
 const MORE: Kind[] = [
   { kind: "mindmap", label: "Mind map" },
   { kind: "report", label: "Reports" },
+  { kind: "slides", label: "Slide deck" },
+  { kind: "infographic", label: "Infographic" },
   { kind: "flashcards", label: "Flashcards" },
   { kind: "quiz", label: "Quiz" },
   { kind: "timeline", label: "Timeline" },
@@ -22,15 +24,16 @@ const MORE: Kind[] = [
   { kind: "study_guide", label: "Study guide" },
   { kind: "briefing", label: "Briefing doc" },
 ];
-const LABEL: Record<string, string> = Object.fromEntries([...MAIN, ...MORE].map((k) => [k.kind, k.label]));
+const LABEL: Record<string, string> = { ...Object.fromEntries([...MAIN, ...MORE].map((k) => [k.kind, k.label])), research: "Research" };
 
-export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, reloadNotes, onAsk }: {
+export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, reloadNotes, onAsk, onSourcesAdded }: {
   notebookId: string;
   artifacts: Artifact[];
   notes: Note[];
   reloadArtifacts: () => void;
   reloadNotes: () => void;
   onAsk: (question: string) => void;
+  onSourcesAdded: () => void;
 }) {
   const [audioId, setAudioId] = useState<string | null>(null);
   const [customize, setCustomize] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export function StudioPanel({ notebookId, artifacts, notes, reloadArtifacts, rel
         <CustomizeDialog kind={customize} notebookId={notebookId} onClose={() => setCustomize(null)}
           onCreated={(a) => { reloadArtifacts(); if (a.kind === "video") navigate(`/notebooks/${notebookId}/video/${a.id}`); }} />
       )}
-      {viewing && <ArtifactViewer artifact={viewing} onClose={() => setViewing(null)} onNoteSaved={reloadNotes} onAsk={onAsk} />}
+      {viewing && <ArtifactViewer artifact={viewing} onClose={() => setViewing(null)} onNoteSaved={reloadNotes} onAsk={onAsk} onSourcesAdded={onSourcesAdded} />}
       {editing && <NoteEditor notebookId={notebookId} note={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={reloadNotes} />}
     </section>
   );
@@ -103,6 +106,7 @@ function OutputRow({ artifact: a, onOpen, onChanged, playing }: { artifact: Arti
   const stageText: Record<string, string> = {
     script: "Writing the script", voices: "Recording voices", mixing: "Mixing", scenes: "Checking scene code",
     narration: "Recording narration", render: "Rendering", verify: "Checking the video",
+    planning: "Planning searches", searching: "Searching the web", reading: "Reading pages", writing: "Writing the report",
   };
   async function remove(e: React.MouseEvent) {
     e.stopPropagation();
@@ -143,7 +147,9 @@ function CustomizeDialog({ kind, notebookId, onClose, onCreated }: { kind: strin
     kind === "audio" ? { format: "deep_dive", length: "default" }
       : kind === "video" ? { length: "standard", purpose: "explainer", palette: "deep-space" }
       : kind === "flashcards" ? { count: 20, difficulty: "medium" }
-      : kind === "quiz" ? { count: 10, difficulty: "medium" } : {},
+      : kind === "quiz" ? { count: 10, difficulty: "medium" }
+      : kind === "slides" ? { count: 10 }
+      : kind === "infographic" ? { palette: "paper" } : {},
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -201,6 +207,13 @@ function CustomizeDialog({ kind, notebookId, onClose, onCreated }: { kind: strin
           {choice("difficulty", "Difficulty", [["easy", "Easy"], ["medium", "Medium"], ["hard", "Hard"]])}
         </>
       )}
+      {kind === "slides" && (
+        <label className="field">
+          Number of slides
+          <input className="input" type="number" min={4} max={30} value={opts.count as number} onChange={(e) => set("count", Number(e.target.value))} />
+        </label>
+      )}
+      {kind === "infographic" && choice("palette", "Look", [["paper", "Paper"], ["deep-space", "Deep space"], ["reef", "Reef"]])}
       {kind === "report" && (
         <label className="field">
           What should the report be?

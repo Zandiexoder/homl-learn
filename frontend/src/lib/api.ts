@@ -89,7 +89,7 @@ export type Notebook = {
 export type Source = {
   id: string;
   notebook_id: string;
-  kind: "pdf" | "web" | "youtube" | "audio" | "text" | "file-text" | "docx";
+  kind: "pdf" | "web" | "youtube" | "audio" | "text" | "file-text" | "docx" | "pptx" | "epub" | "image";
   title: string;
   uri: string | null;
   status: "queued" | "processing" | "ready" | "failed";

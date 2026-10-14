@@ -35,6 +35,24 @@ MARKDOWN_KINDS = {
 }
 
 JSON_KINDS = {
+    "slides": (
+        "Slide deck",
+        'Reply with JSON only: {{"title": "deck title", "subtitle": "...", "slides": [slide, ...]}}. Make {count} '
+        'slides that teach the sources in a logical order. Each slide is one of: '
+        '{{"layout": "section", "title": "..."}} for a new part; '
+        '{{"layout": "bullets", "title": "...", "bullets": ["3-5 points of at most 12 words"], "notes": "speaker notes"}}; '
+        '{{"layout": "two_column", "title": "...", "left": {{"heading": "...", "bullets": [...]}}, "right": {{"heading": "...", "bullets": [...]}}, "notes": "..."}} for comparisons; '
+        '{{"layout": "quote", "quote": "a short exact quote", "attribution": "source title", "notes": "..."}}. '
+        "End with a summary slide. Put detail in the notes, not on the slide.",
+    ),
+    "infographic": (
+        "Infographic",
+        'Reply with JSON only: {{"title": "max 8 words", "subtitle": "one sentence", '
+        '"stats": [{{"value": "a figure stated in the sources", "label": "max 6 words"}}], '
+        '"sections": [{{"heading": "max 4 words", "text": "max 22 words"}}], '
+        '"steps": ["optional process steps, max 6 words each"], "takeaway": "one sentence", "source": "source titles"}}. '
+        "Use 0-4 stats and only numbers that appear in the sources (an empty list is fine), 3-4 sections and 0-5 steps.",
+    ),
     "timeline": (
         "Timeline",
         'Reply with JSON only: {{"events": [{{"date": "as precise as the sources allow", "title": "...", '
@@ -61,7 +79,8 @@ JSON_KINDS = {
 }
 
 KINDS = {**MARKDOWN_KINDS, **JSON_KINDS}
-DEFAULT_COUNT = {"study_guide": 10, "faq": 10, "flashcards": 20, "quiz": 10}
+DEFAULT_COUNT = {"study_guide": 10, "faq": 10, "flashcards": 20, "quiz": 10, "slides": 10}
+SLIDE_LAYOUTS = {"section", "bullets", "two_column", "quote"}
 
 
 def default_title(kind: str) -> str:
@@ -106,6 +125,30 @@ def validate(kind: str, data: object) -> dict:
         if not questions:
             raise ValueError("No valid quiz questions were produced.")
         return {"questions": questions}
+    if kind == "slides":
+        slides = []
+        for s in data.get("slides", []):
+            if not isinstance(s, dict):
+                continue
+            layout = s.get("layout") if s.get("layout") in SLIDE_LAYOUTS else "bullets"
+            if layout == "quote" and not s.get("quote"):
+                continue
+            if layout != "quote" and not s.get("title"):
+                continue
+            slides.append({**s, "layout": layout})
+        if not slides:
+            raise ValueError("No usable slides were produced.")
+        return {"title": str(data.get("title") or "Slides"), "subtitle": str(data.get("subtitle") or ""), "slides": slides}
+    if kind == "infographic":
+        if not data.get("title") or not isinstance(data.get("sections"), list) or not data["sections"]:
+            raise ValueError("The infographic needs a title and sections.")
+        return {
+            "title": str(data["title"]), "subtitle": str(data.get("subtitle") or ""),
+            "stats": [s for s in data.get("stats", []) if isinstance(s, dict) and s.get("value")][:4],
+            "sections": [s for s in data["sections"] if isinstance(s, dict) and s.get("heading")][:4],
+            "steps": [str(s) for s in data.get("steps", []) if s][:5],
+            "takeaway": str(data.get("takeaway") or ""), "source": str(data.get("source") or ""),
+        }
     if kind == "timeline":
         return {"events": data.get("events", []), "cast": data.get("cast", [])}
     return data
@@ -137,4 +180,23 @@ async def generate(artifact_id: str) -> None:
             data = validate(art["kind"], jsonutil.extract_json(raw))
     else:
         data = {"markdown": raw}
+    if art["kind"] in ("slides", "infographic") and data.get("title"):
+        db.update("artifacts", artifact_id, {"title": data["title"][:200]})
+    if art["kind"] == "infographic":
+        db.update("artifacts", artifact_id, {"data": data, "progress": {"stage": "render"}, "updated_at": db.now()})
+        data["image"] = await render_infographic(art, data)
     db.update("artifacts", artifact_id, {"status": "done", "data": data, "updated_at": db.now()})
+
+
+async def render_infographic(art: dict, data: dict) -> str:
+    """Draw the infographic as a PNG with the video renderer's Remotion kit."""
+    import json
+
+    from .video import pipeline
+
+    folder = pipeline.job_dir(art["notebook_id"], art["id"])
+    palette = art["options"].get("palette") or "paper"
+    accents = pipeline.PALETTE_ACCENTS.get(palette, pipeline.PALETTE_ACCENTS["paper"])
+    (folder / "still.json").write_text(json.dumps({"kind": "infographic", "palette": palette, "accent": accents[0], "data": data}))
+    result = await pipeline.render_still(folder)
+    return pipeline.rel(folder / result["image"])

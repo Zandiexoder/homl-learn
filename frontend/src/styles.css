@@ -286,3 +286,18 @@ table.plain td { padding: 8px 14px; border-top: 1px solid var(--line-2); }
 
 .login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .login form { width: min(400px, 100%); }
+
+mark.cited { background: var(--amber-soft); color: var(--ink); border-radius: 3px; padding: 1px 0; box-shadow: inset 3px 0 0 var(--amber); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+/* ---------- slides */
+.slide { aspect-ratio: 16 / 9; width: 100%; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); padding: 5% 6%; display: flex; flex-direction: column; gap: 2.5%; container-type: inline-size; overflow: hidden; }
+.slide[data-layout="section"] { background: var(--ink); color: var(--surface); }
+.slide-center { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 3cqi; }
+.slide-title { font-family: var(--display); font-weight: 700; font-size: 4.4cqi; line-height: 1.1; letter-spacing: -0.02em; }
+.slide[data-layout="section"] .slide-title { font-size: 5.5cqi; }
+.slide-sub { font-size: 2.4cqi; opacity: 0.8; }
+.slide-bar { width: 10%; height: 0.7cqi; border-radius: 1cqi; background: var(--accent); }
+.slide-body { font-size: 2.5cqi; line-height: 1.35; }
+.slide-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 5%; }
+.slide-colhead { font-weight: 700; color: var(--accent); font-size: 2.7cqi; margin-bottom: 1.5cqi; }
+.slide-quote { font-family: var(--display); font-size: 4cqi; font-weight: 600; line-height: 1.25; }

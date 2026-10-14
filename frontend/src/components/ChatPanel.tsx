@@ -10,7 +10,7 @@ type Pending = { question: string; text: string; citations: Citation[]; error?: 
 export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved, onNotebookChange, pendingQuestion, onQuestionTaken }: {
   notebook: Notebook;
   readyCount: number;
-  onOpenSource: (sourceId: string) => void;
+  onOpenSource: (sourceId: string, passage?: string) => void;
   onNoteSaved: () => void;
   onNotebookChange: (nb: Notebook) => void;
   /** A question sent from elsewhere (e.g. a mind map node) to ask now. */
@@ -107,7 +107,7 @@ export function ChatPanel({ notebook, readyCount, onOpenSource, onNoteSaved, onN
         <blockquote className="quote">
           <div className="row mono small muted" style={{ marginBottom: 4 }}>
             <span className="grow">[{openCite.c.n}] {openCite.c.source_title}{openCite.c.page ? ` · p. ${openCite.c.page}` : ""}</span>
-            <button className="btn sm" onClick={() => onOpenSource(openCite.c.source_id)}>Open source</button>
+            <button className="btn sm" onClick={() => onOpenSource(openCite.c.source_id, openCite.c.text)}>Open source</button>
           </div>
           {openCite.c.text}
         </blockquote>

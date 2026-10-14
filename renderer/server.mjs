@@ -134,7 +134,7 @@ function renderInWorker(job) {
       }
       resolve();
     });
-    child.send({ jobDir: job.jobDir });
+    child.send({ jobDir: job.jobDir, mode: job.mode });
   });
 }
 
@@ -193,6 +193,21 @@ async function renderJob(job) {
   }
 }
 
+/** Render still.json (an infographic) to still.png. No custom code is involved, so no workspace. */
+async function renderStillJob(job) {
+  const spec = JSON.parse(await fs.readFile(path.join(job.jobDir, "still.json"), "utf8"));
+  job.stage = "bundling";
+  const serveUrl = await bundle({ entryPoint: path.join(ROOT, "src/index.ts") });
+  const inputProps = { spec };
+  const chromiumOptions = GL ? { gl: GL } : {};
+  const composition = await selectComposition({ serveUrl, id: "Infographic", inputProps, browserExecutable: BROWSER, chromiumOptions });
+  job.stage = "rendering";
+  await renderStill({ composition, serveUrl, output: path.join(job.jobDir, "still.png"), frame: 0, inputProps, imageFormat: "png", browserExecutable: BROWSER, chromiumOptions });
+  job.result = { image: "still.png", width: composition.width, height: composition.height };
+  job.status = "done";
+  job.stage = "done";
+}
+
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
@@ -218,7 +233,8 @@ app.post("/jobs", (req, res) => {
     return res.status(400).json({ error: err.message });
   }
   const id = randomUUID();
-  const job = { id, jobDir, status: "queued", stage: "queued", progress: 0, failed: {}, result: null, error: null };
+  const mode = req.body.mode === "still" ? "still" : "video";
+  const job = { id, jobDir, mode, status: "queued", stage: "queued", progress: 0, failed: {}, result: null, error: null };
   jobs.set(id, job);
   queue = queue.then(async () => {
     job.status = "running";
@@ -235,12 +251,12 @@ app.get("/jobs/:id", (req, res) => {
 
 if (process.argv.includes("--worker")) {
   // Child process: render one job and report progress to the parent.
-  process.once("message", async ({ jobDir }) => {
+  process.once("message", async ({ jobDir, mode }) => {
     const job = { jobDir, status: "running", stage: "checking", progress: 0, failed: {}, result: null, error: null };
     const report = () => process.send?.({ status: job.status, stage: job.stage, progress: job.progress, failed: job.failed, result: job.result, error: job.error });
     const timer = setInterval(report, 1000);
     try {
-      await renderJob(job);
+      await (mode === "still" ? renderStillJob(job) : renderJob(job));
     } catch (err) {
       job.status = "failed";
       job.error = String(err.stack ?? err).slice(0, 4000);
@@ -256,4 +272,4 @@ if (process.argv.includes("--worker")) {
   app.listen(PORT, () => console.log(`renderer listening on :${PORT}`));
 }
 
-export { app, prepareWorkspace, renderJob };
+export { app, prepareWorkspace, renderJob, renderStillJob };

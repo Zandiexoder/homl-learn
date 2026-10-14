@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import logging
+import secrets
 import shutil
 from typing import Literal
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from .. import chat, db, ingest, jobs, podcast, security, studio, voice
+from .. import chat, db, exporters, ingest, jobs, podcast, research, security, studio, voice
 from ..config import get_config
 from ..video import pipeline as video
 
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/api", dependencies=[Depends(security.require_session
 log = logging.getLogger("homl.api")
 
 MAX_UPLOAD = 500 * 1024 * 1024
-ARTIFACT_KINDS = set(studio.KINDS) | {"audio", "video"}
+ARTIFACT_KINDS = set(studio.KINDS) | {"audio", "video", "research"}
 
 
 def notebook_or_404(notebook_id: str) -> dict:
@@ -366,6 +367,8 @@ def _run_artifact(artifact_id: str, kind: str, start_at: str = "script") -> None
         jobs.spawn("audio", lambda: podcast.generate(artifact_id), fail)
     elif kind == "video":
         jobs.spawn("video", lambda: video.generate(artifact_id, start_at), fail)
+    elif kind == "research":
+        jobs.spawn("studio", lambda: research.generate(artifact_id), fail)
     else:
         jobs.spawn("studio", lambda: studio.generate(artifact_id), fail)
 
@@ -380,7 +383,8 @@ def create_artifact(notebook_id: str, body: ArtifactIn) -> dict:
     notebook_or_404(notebook_id)
     if body.kind not in ARTIFACT_KINDS:
         raise HTTPException(400, f"Unknown output type: {body.kind}")
-    default = {"audio": "Audio overview", "video": "Video overview"}.get(body.kind) or studio.default_title(body.kind)
+    default = {"audio": "Audio overview", "video": "Video overview", "research": "Research"}.get(body.kind) \
+        or studio.default_title(body.kind)
     art = {"id": db.new_id(), "notebook_id": notebook_id, "kind": body.kind, "title": body.title or default,
            "status": "queued", "progress": {}, "options": body.options, "data": {}, "error": None,
            "created_at": db.now(), "updated_at": db.now()}
@@ -488,6 +492,57 @@ def rerun(artifact_id: str, body: RerunIn) -> dict:
     db.update("artifacts", artifact_id, {"status": "queued", "error": None, "updated_at": db.now()})
     _run_artifact(artifact_id, art["kind"], start)
     return artifact_or_404(artifact_id)
+
+
+# ------------------------------------------------------------------ export and share
+
+def _download(content: bytes, filename: str, media_type: str) -> Response:
+    from urllib.parse import quote
+
+    return Response(content, media_type=media_type,
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"})
+
+
+@router.get("/artifacts/{artifact_id}/export/pptx")
+def export_pptx(artifact_id: str) -> Response:
+    art = artifact_or_404(artifact_id)
+    if art["kind"] != "slides" or art["status"] != "done":
+        raise HTTPException(400, "Only finished slide decks can be downloaded as PowerPoint.")
+    return _download(exporters.build_pptx(art["data"]), f"{exporters.safe_name(art['title'], 'slides')}.pptx",
+                     "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
+
+@router.get("/notebooks/{notebook_id}/export")
+def export_notebook(notebook_id: str) -> Response:
+    notebook_or_404(notebook_id)
+    name, content = exporters.notebook_zip(notebook_id)
+    return _download(content, name, "application/zip")
+
+
+@router.get("/artifacts/{artifact_id}/share")
+def get_share(artifact_id: str) -> dict:
+    artifact_or_404(artifact_id)
+    row = db.fetch_one("SELECT token FROM shares WHERE artifact_id=?", (artifact_id,))
+    return {"token": row["token"] if row else None}
+
+
+@router.post("/artifacts/{artifact_id}/share")
+def create_share(artifact_id: str) -> dict:
+    art = artifact_or_404(artifact_id)
+    if art["status"] != "done":
+        raise HTTPException(400, "Wait until it's finished before sharing.")
+    row = db.fetch_one("SELECT token FROM shares WHERE artifact_id=?", (artifact_id,))
+    if row:
+        return {"token": row["token"]}
+    token = secrets.token_urlsafe(18)
+    db.insert("shares", {"token": token, "artifact_id": artifact_id, "created_at": db.now()})
+    return {"token": token}
+
+
+@router.delete("/artifacts/{artifact_id}/share")
+def delete_share(artifact_id: str) -> dict:
+    db.execute("DELETE FROM shares WHERE artifact_id=?", (artifact_id,))
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------ files

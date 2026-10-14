@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, fileUrl, type Artifact } from "../lib/api";
 import { startRecording } from "../lib/recorder";
+import { ShareButton } from "./ArtifactViewer";
 import { Icon } from "./Icon";
 
 type Turn = { speaker: "A" | "B"; text: string; start?: number };
@@ -132,6 +133,7 @@ export function AudioPlayer({ artifact }: { artifact: Artifact }) {
       <button className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setShowTranscript((v) => !v)} aria-expanded={showTranscript}>
         {showTranscript ? "Hide transcript" : "Show transcript"}
       </button>
+      <ShareButton artifactId={artifact.id} />
       {showTranscript && (
         <ol className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6, maxHeight: 280, overflow: "auto" }}>
           {data.turns.map((t, i) => (
